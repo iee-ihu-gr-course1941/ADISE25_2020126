@@ -44,11 +44,11 @@ CREATE TABLE `board` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8;
 
 -- Γεμίζουμε τον πίνακα με τις 24 θέσεις (αρχικά κενές)
--- INSERT INTO `board` (`x`, `piece_count`, `piece_color`) VALUES 
--- (1,0,null),(2,0,null),(3,0,null),(4,0,null),(5,0,null),(6,0,null),
--- (7,0,null),(8,0,null),(9,0,null),(10,0,null),(11,0,null),(12,0,null),
--- (13,0,null),(14,0,null),(15,0,null),(16,0,null),(17,0,null),(18,0,null),
--- (19,0,null),(20,0,null),(21,0,null),(22,0,null),(23,0,null),(24,0,null);
+INSERT INTO `board` (`x`, `piece_count`, `piece_color`) VALUES 
+(1,0,null),(2,0,null),(3,0,null),(4,0,null),(5,0,null),(6,0,null),
+(7,0,null),(8,0,null),(9,0,null),(10,0,null),(11,0,null),(12,0,null),
+(13,0,null),(14,0,null),(15,0,null),(16,0,null),(17,0,null),(18,0,null),
+(19,0,null),(20,0,null),(21,0,null),(22,0,null),(23,0,null),(24,0,null);
 
 -- ==========================================
 -- 4. Διαδικασία Reset / Εκκίνησης (Stored Procedure)
