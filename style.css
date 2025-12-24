@@ -1,0 +1,72 @@
+/* style.css */
+
+body {
+    background-color: #2c3e50; /* Σκούρο φόντο για τη σελίδα */
+    font-family: sans-serif;
+    margin: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+
+h1 { color: white; }
+
+/* Το ξύλινο πλαίσιο του ταμπλό */
+.board {
+    width: 600px;
+    height: 400px;
+    background-color: #8B4513; /* Καφέ χρώμα ξύλου */
+    border: 15px solid #5D4037; /* Πιο σκούρο περίγραμμα */
+    border-radius: 10px;
+    display: flex; /* Χρησιμοποιούμε Flexbox για να βάλουμε τα μέρη δίπλα-δίπλα */
+    padding: 10px;
+    position: relative;
+}
+
+/* Τα δύο μισά του ταμπλό (αριστερά και δεξιά) */
+.half-board {
+    flex: 1; /* Πιάνει τον μισό χώρο */
+    display: flex;
+    background-color: #DEB887; /* Ανοιχτό καφέ για το εσωτερικό */
+    position: relative;
+}
+
+/* Η μπάρα στη μέση */
+.bar {
+    width: 40px;
+    background-color: #5D4037;
+    height: 100%;
+}
+
+/* Περιοχές για τα τρίγωνα (πάνω και κάτω) */
+.row {
+    position: absolute;
+    width: 100%;
+    height: 40%; /* Το ύψος των τριγώνων */
+    display: flex;
+}
+
+.top { top: 0; }
+.bottom { bottom: 0; }
+
+/* Τα τρίγωνα (Points) */
+.point {
+    flex: 1; /* Κάθε τρίγωνο πιάνει ίσο χώρο */
+    height: 100%;
+    margin: 0 1px;
+    /* Κόλπο για να γίνει τρίγωνο με clip-path */
+    clip-path: polygon(50% 100%, 0 0, 100% 0); 
+}
+
+/* Για την κάτω σειρά, το τρίγωνο κοιτάει ανάποδα */
+.bottom .point {
+    clip-path: polygon(50% 0, 0 100%, 100% 100%);
+}
+
+/* Χρώματα τριγώνων */
+.point:nth-child(odd) { background-color: #555; } /* Μαύρα */
+.point:nth-child(even) { background-color: #e74c3c; } /* Κόκκινα */
+
+/* Αναστροφή χρωμάτων στην κάτω σειρά για να ταιριάζουν */
+.bottom .point:nth-child(odd) { background-color: #e74c3c; }
+.bottom .point:nth-child(even) { background-color: #555; }
