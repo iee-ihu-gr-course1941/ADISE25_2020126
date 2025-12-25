@@ -1,7 +1,7 @@
 /* style.css */
 
 body {
-    background-color: #2c3e50; /* Σκούρο φόντο για τη σελίδα */
+    background-color: #2c3e50;
     font-family: sans-serif;
     margin: 0;
     display: flex;
@@ -11,62 +11,222 @@ body {
 
 h1 { color: white; }
 
-/* Το ξύλινο πλαίσιο του ταμπλό */
+/* --- 1. GAME WRAPPER (Για στοίχιση ονομάτων και ταμπλό) --- */
+.game-wrapper {
+    /* ΠΡΟΣΟΧΗ: Πρέπει να είναι ίδιο με το width του .board (600px) */
+    width: 600px; 
+    margin: 0 auto; 
+    display: flex;
+    flex-direction: column;
+}
+
+/* --- 2. ΤΟ ΞΥΛΙΝΟ ΠΛΑΙΣΙΟ (BOARD) --- */
 .board {
-    width: 600px;
+    width: 600px; /* Το πλάτος που είχες */
     height: 400px;
-    background-color: #8B4513; /* Καφέ χρώμα ξύλου */
-    border: 15px solid #5D4037; /* Πιο σκούρο περίγραμμα */
+    background-color: #8B4513;
+    border: 15px solid #5D4037;
     border-radius: 10px;
-    display: flex; /* Χρησιμοποιούμε Flexbox για να βάλουμε τα μέρη δίπλα-δίπλα */
+    display: flex;
     padding: 10px;
     position: relative;
+    /* Σημαντικό: box-sizing για να μην χαλάει το πλάτος με το padding */
+    box-sizing: content-box; 
 }
 
-/* Τα δύο μισά του ταμπλό (αριστερά και δεξιά) */
 .half-board {
-    flex: 1; /* Πιάνει τον μισό χώρο */
+    flex: 1;
     display: flex;
-    background-color: #DEB887; /* Ανοιχτό καφέ για το εσωτερικό */
+    background-color: #DEB887;
     position: relative;
 }
 
-/* Η μπάρα στη μέση */
 .bar {
     width: 40px;
     background-color: #5D4037;
     height: 100%;
 }
 
-/* Περιοχές για τα τρίγωνα (πάνω και κάτω) */
 .row {
     position: absolute;
     width: 100%;
-    height: 40%; /* Το ύψος των τριγώνων */
+    height: 40%;
     display: flex;
 }
 
 .top { top: 0; }
 .bottom { bottom: 0; }
 
-/* Τα τρίγωνα (Points) */
+/* Points (Τρίγωνα) */
 .point {
-    flex: 1; /* Κάθε τρίγωνο πιάνει ίσο χώρο */
+    flex: 1;
     height: 100%;
     margin: 0 1px;
-    /* Κόλπο για να γίνει τρίγωνο με clip-path */
     clip-path: polygon(50% 100%, 0 0, 100% 0); 
 }
 
-/* Για την κάτω σειρά, το τρίγωνο κοιτάει ανάποδα */
 .bottom .point {
     clip-path: polygon(50% 0, 0 100%, 100% 100%);
 }
 
-/* Χρώματα τριγώνων */
-.point:nth-child(odd) { background-color: #555; } /* Μαύρα */
-.point:nth-child(even) { background-color: #e74c3c; } /* Κόκκινα */
+.point:nth-child(odd) { background-color: #555; }
+.point:nth-child(even) { background-color: #e74c3c; }
 
-/* Αναστροφή χρωμάτων στην κάτω σειρά για να ταιριάζουν */
 .bottom .point:nth-child(odd) { background-color: #e74c3c; }
 .bottom .point:nth-child(even) { background-color: #555; }
+
+
+/* --- 3. ΣΤΥΛ ΟΝΟΜΑΤΩΝ --- */
+.player-label {
+    padding: 5px 0;
+    font-size: 1.4rem;
+    font-weight: bold;
+    font-family: sans-serif;
+}
+
+/* Πάνω Παίκτης (Δεξιά, Μαύρο με λάμψη) */
+.top-right {
+    text-align: right; 
+    margin-bottom: 5px;
+    color: #000; 
+    text-shadow: 0 0 3px #fff, 0 0 5px #fff, 0 0 10px #fff;
+}
+
+/* Κάτω Παίκτης (Αριστερά, Λευκό με σκιά) */
+.bottom-left {
+    text-align: left;
+    margin-top: 5px;
+    color: #fff;
+    text-shadow: 2px 2px 4px #000;
+}
+
+
+/* --- 4. ZARIA (DICE) --- */
+#dice-container {
+    margin: 15px auto;
+    text-align: center;
+    height: 50px;
+}
+
+.dice-box {
+    display: inline-block;
+    width: 40px;
+    height: 40px;
+    background-color: white;
+    border: 2px solid #333;
+    border-radius: 8px;
+    margin: 0 5px;
+    font-size: 24px;
+    line-height: 38px;
+    font-weight: bold;
+    color: #333;
+    box-shadow: 3px 3px 5px rgba(0,0,0,0.3);
+}
+
+/* Κουμπί για τα ζάρια */
+#btn-roll {
+    background-color: #ff9800;
+    color: white;
+    border: none;
+    border-radius: 5px;
+    font-weight: bold;
+    padding: 10px 20px; 
+    font-size: 16px; 
+    cursor: pointer;
+}
+#btn-roll:hover { background-color: #e68900; }
+
+
+/* --- 5. ΠΟΥΛΙΑ --- */
+.piece {
+    width: 30px; height: 30px;
+    border-radius: 50%;
+    border: 2px solid #000;
+    margin: 2px auto;
+    box-shadow: 2px 2px 5px rgba(0,0,0,0.5);
+}
+.white-piece { background-color: #fff; }
+.black-piece { background-color: #222; }
+
+/* --- 6. CONTROLS --- */
+#controls { margin-top: 20px; text-align: center; }
+#controls button { padding: 10px 20px; font-size: 16px; cursor: pointer; }
+
+/* style.css (Προσθήκες) */
+
+/* --- SCOREBOARD (Πίνακας Σκορ) --- */
+#scoreboard {
+    position: absolute; /* Το "καρφώνουμε" σε συγκεκριμένη θέση */
+    top: 20px;
+    left: 20px;
+    background-color: rgba(0, 0, 0, 0.6); /* Ημιδιάφανο μαύρο */
+    padding: 10px;
+    border-radius: 8px;
+    color: white;
+    border: 1px solid #fff;
+    box-shadow: 2px 2px 10px rgba(0,0,0,0.5);
+}
+
+#scoreboard table {
+    border-collapse: collapse;
+}
+
+#scoreboard th, #scoreboard td {
+    padding: 5px 10px;
+    text-align: center;
+    border: 1px solid rgba(255,255,255,0.3);
+}
+
+#scoreboard th {
+    font-size: 0.9rem;
+    color: #ff9800; /* Πορτοκαλί για τους τίτλους */
+}
+
+#scoreboard td {
+    font-size: 1.5rem;
+    font-weight: bold;
+}
+
+/* --- SURRENDER BUTTONS (Κουμπιά Παραίτησης) --- */
+.btn-surrender {
+    background-color: #c0392b; /* Κόκκινο */
+    color: white;
+    border: none;
+    border-radius: 4px;
+    padding: 5px 10px;
+    font-size: 0.8rem;
+    cursor: pointer;
+    margin-left: 10px; /* Απόσταση από το όνομα */
+    opacity: 0.8;
+    transition: 0.3s;
+}
+
+.btn-surrender:hover {
+    background-color: #e74c3c;
+    opacity: 1;
+}
+
+/* Το μεγάλο κουμπί Έναρξης */
+#btn-start-game {
+    padding: 15px 30px;
+    font-size: 1.2rem;
+    font-weight: bold;
+    background-color: #27ae60; /* Πράσινο */
+    color: white;
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+    box-shadow: 0 4px 10px rgba(0,0,0,0.3);
+    animation: pulse 2s infinite; /* Εφέ παλμού για να φαίνεται */
+}
+
+#btn-start-game:hover {
+    background-color: #2ecc71;
+}
+
+/* Εφέ παλμού */
+@keyframes pulse {
+    0% { transform: scale(1); }
+    50% { transform: scale(1.05); }
+    100% { transform: scale(1); }
+}
