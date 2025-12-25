@@ -49,17 +49,24 @@ DROP PROCEDURE IF EXISTS clean_board//
 
 CREATE PROCEDURE clean_board()
 BEGIN
-    -- Α. Καθαρισμός Ταμπλό
+    -- 1. Αδειάζουμε όλο το ταμπλό
     UPDATE board SET piece_count = 0, piece_color = null;
 
-    -- Β. Στήσιμο ΦΕΥΓΑ
-    -- ΛΕΥΚΑ: Κάτω Αριστερά -> Θέση 12
-    UPDATE board SET piece_count = 15, piece_color = 'W' WHERE x = 12;
-    -- ΜΑΥΡΑ: Πάνω Δεξιά -> Θέση 24
-    UPDATE board SET piece_count = 15, piece_color = 'B' WHERE x = 24;
+    -- 2. Στήσιμο ΦΕΥΓΑ (ΔΙΟΡΘΩΜΕΝΟ)
     
-    -- Γ. Ενημέρωση Status (ΑΥΤΟ ΕΛΕΙΠΕ)
-    -- Ορίζουμε ότι το παιχνίδι ξεκίνησε, παίζουν τα Άσπρα, και μηδενίζουμε τα ζάρια
+    -- ΛΕΥΚΑ (Παίκτης 1 - Κάτω): 
+    -- Ξεκινάνε από την Πάνω Δεξιά γωνία -> Θέση 24
+    UPDATE board 
+    SET piece_count = 15, piece_color = 'W' 
+    WHERE x = 24;
+
+    -- ΜΑΥΡΑ (Παίκτης 2 - Πάνω): 
+    -- Ξεκινάνε από την Κάτω Αριστερά γωνία -> Θέση 12
+    UPDATE board 
+    SET piece_count = 15, piece_color = 'B' 
+    WHERE x = 12;
+    
+    -- 3. Ενημέρωση Status
     UPDATE game_status 
     SET status='started', p_turn='W', dice1=NULL, dice2=NULL, result=NULL;
     
