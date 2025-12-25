@@ -1,9 +1,9 @@
 <?php
 // game.php
-require_once "lib/dbconnect.php"; // Συνδέουμε τη βάση για να μπορούμε να μηδενίσουμε το σκορ
+require_once "lib/dbconnect.php";
 session_start();
 
-// --- ΕΛΕΓΧΟΣ ΑΣΦΑΛΕΙΑΣ ---
+// Έλεγχος Ασφαλείας
 if (!isset($_SESSION['player_white']) || !isset($_SESSION['player_black'])) {
     if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
         $_SESSION['error'] = "Πρέπει να κάνετε Login για να παίξετε!";
@@ -12,65 +12,55 @@ if (!isset($_SESSION['player_white']) || !isset($_SESSION['player_black'])) {
     }
 }
 
-// --- ΛΟΓΙΚΗ LOGIN (ΝΕΟ ΠΑΙΧΝΙΔΙ) ---
+// Λογική Login
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (!empty($_POST['player1']) && !empty($_POST['player2'])) {
-        
-        // 1. Αποθήκευση Ονομάτων στο Session
         $p1_name = htmlspecialchars($_POST['player1']);
         $p2_name = htmlspecialchars($_POST['player2']);
         $choice  = $_POST['p1_color']; 
 
+        // Εδώ ορίζουμε ποιος είμαι ΕΓΩ σε αυτόν τον browser
         if ($choice === 'white') {
             $_SESSION['player_white'] = $p1_name; 
             $_SESSION['player_black'] = $p2_name; 
+            $_SESSION['my_color'] = 'white'; 
         } else {
+            // Αν επέλεξα "Μαύρα", τότε εγώ (ο παίκτης 1 της φόρμας) είμαι ο Μαύρος
             $_SESSION['player_black'] = $p1_name; 
             $_SESSION['player_white'] = $p2_name; 
+            $_SESSION['my_color'] = 'black';
         }
 
-        if (!isset($_SESSION['turn'])) {
-            $_SESSION['turn'] = 'white';
-        }
+        if (!isset($_SESSION['turn'])) $_SESSION['turn'] = 'white';
 
-        // 2. ΜΗΔΕΝΙΣΜΟΣ ΣΚΟΡ & ΚΑΘΑΡΙΣΜΟΣ ΤΡΑΠΕΖΙΟΥ (SQL)
-        // Αυτό τρέχει ΜΟΝΟ όταν πατάς "Έναρξη" από την αρχική σελίδα
-        
-        // Μηδενίζουμε το σκορ
-        $sql_score = "UPDATE game_status SET score_w=0, score_b=0";
-        $mysqli->query($sql_score);
-
-        // Καλούμε την clear_game() για να αδειάσει το ταμπλό και να βγει το κουμπί 'Έναρξη'
-        $sql_clear = "call clear_game()";
-        $mysqli->query($sql_clear);
+        // --- ΠΡΟΣΟΧΗ: ΑΦΑΙΡΕΣΑΜΕ ΤΟΝ ΜΗΔΕΝΙΣΜΟ ΑΠΟ ΕΔΩ ---
+        // Ο μηδενισμός θα γίνεται μόνο με το κουμπί "Έναρξη Παιχνιδιού"
+        // έτσι ώστε αν μπει ο 2ος παίκτης να μην χαλάσει το ματς.
 
     } else {
-        $_SESSION['error'] = "Παρακαλώ συμπληρώστε και τα δύο ονόματα!";
+        $_SESSION['error'] = "Παρακαλώ συμπληρώστε ονόματα!";
         header("Location: index.php");
         exit();
     }
 }
 ?>
-
 <!DOCTYPE html>
 <html>
 <head>
     <title>Παιχνίδι Φεύγα</title>
-    <link rel="stylesheet" type="text/css" href="style.css?v=3">
+    <link rel="stylesheet" type="text/css" href="style.css?v=6">
+    <script>
+        const myColor = "<?php echo isset($_SESSION['my_color']) ? $_SESSION['my_color'] : ''; ?>";
+        console.log("My Color is: " + myColor); 
+    </script>
     <script src="fevga.js" defer></script> 
 </head>
 <body>
 
     <div id="scoreboard">
         <table>
-            <tr>
-                <th><?php echo $_SESSION['player_white']; ?> (A)</th>
-                <th><?php echo $_SESSION['player_black']; ?> (M)</th>
-            </tr>
-            <tr>
-                <td id="score-w">0</td>
-                <td id="score-b">0</td>
-            </tr>
+            <tr><th><?php echo $_SESSION['player_white']; ?> (A)</th><th><?php echo $_SESSION['player_black']; ?> (M)</th></tr>
+            <tr><td id="score-w">0</td><td id="score-b">0</td></tr>
         </table>
     </div>
 
@@ -78,6 +68,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         <div class="player-label top-right">
             <button class="btn-surrender" onclick="surrender('black')">Τα παρατάω</button>
             <span class="p-name"><?php echo $_SESSION['player_black']; ?></span>
+            <div id="turn-label-b" class="turn-box top">Είναι η σειρά σου</div>
         </div>
         
         <div class="board">
@@ -109,6 +100,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         </div>
 
         <div class="player-label bottom-left">
+            <div id="turn-label-w" class="turn-box bottom">Είναι η σειρά σου</div>
             <span class="p-name"><?php echo $_SESSION['player_white']; ?></span>
             <button class="btn-surrender" onclick="surrender('white')">Τα παρατάω</button>
         </div>
@@ -117,19 +109,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     <div id="dice-container">
         <button id="btn-roll" onclick="rollDice()">Ρίξε τα Ζάρια!</button>
         <div id="dice-display" style="display:none;">
-            <div class="dice-box" id="d1">?</div>
-            <div class="dice-box" id="d2">?</div>
+            <div class="dice-box" id="d1">?</div><div class="dice-box" id="d2">?</div>
         </div>
     </div>
 
     <div id="controls">
         <button id="btn-start-game" onclick="startGame()">Έναρξη Παιχνιδιού</button>
-
         <div id="game-controls" style="display:none;">
             <button onclick="resetGame()">Νέο Παιχνίδι (Reset)</button>
             <button onclick="updateAll()">Ανανέωση</button>
         </div>
-
         <br>
         <a href="logout.php" style="color: white; display:inline-block; margin-top:15px;">Έξοδος</a>
     </div>
