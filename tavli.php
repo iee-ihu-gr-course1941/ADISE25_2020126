@@ -47,7 +47,6 @@ function handle_status($method, $input) {
 }
 
 // --- LOGIC FUNCTIONS ---
-
 function move_piece($from, $to, $playerColor) {
     global $mysqli;
     
@@ -59,47 +58,40 @@ function move_piece($from, $to, $playerColor) {
         echo json_encode(['error' => 'Δεν είναι η σειρά σου!']); return;
     }
 
-    // 2. Υπολογισμός Απόστασης
-    $distance = 0;
-    if ($pCode == 'W') {
-        if ($to >= $from) { echo json_encode(['error' => 'Τα Άσπρα πάνε προς το 1']); return; }
-        $distance = $from - $to;
-    } else {
-        // Κυκλική λογική Μαύρων
-        if ($from >= 12 && $to > $from) $distance = $to - $from;
-        elseif ($from < 12 && $to > $from) $distance = $to - $from;
-        elseif ($from > $to) $distance = (24 - $from) + $to;
-        else { echo json_encode(['error' => 'Λάθος κατεύθυνση']); return; }
+    // 2. Υπολογισμός Απόστασης (ΠΡΟΣΟΧΗ: Τώρα και οι δύο κινούνται αφαιρετικά)
+    // Άσπρα (24->1) και Μαύρα (12->1)
+    $distance = $from - $to; 
+
+    if ($distance <= 0) {
+        echo json_encode(['error' => 'Λάθος κατεύθυνση κίνησης']); return;
     }
     
-    // 3. Έλεγχος Ζαριών (Απλό ή Διπλό)
-    $diceToUse = []; // Ποια ζάρια θα κάψουμε
+    // 3. Έλεγχος Ζαριών
+    $diceToUse = []; 
     $d1 = $status['dice1'];
     $d2 = $status['dice2'];
 
-    // Περίπτωση Α: Απλή κίνηση (ίση με το ένα ζάρι)
+    // Απλή κίνηση
     if ($d1 == $distance) $diceToUse = ['dice1'];
     elseif ($d2 == $distance) $diceToUse = ['dice2'];
     
-    // Περίπτωση Β: Σύνθετη κίνηση (Άθροισμα) - Π.χ. 2+4=6
+    // Σύνθετη κίνηση (Άθροισμα) - Επιτρέπεται για την "Μάνα"
     elseif ($d1 && $d2 && ($d1 + $d2 == $distance)) {
-        // Εδώ κανονικά πρέπει να ελέγξουμε αν το ενδιάμεσο πάτημα είναι ανοιχτό.
-        // Για ευκολία τώρα το επιτρέπουμε, αλλά καίμε ΚΑΙ ΤΑ ΔΥΟ ζάρια.
         $diceToUse = ['dice1', 'dice2'];
     } 
     else {
-        echo json_encode(['error' => "Λάθος ζαριά! Απόσταση: $distance. Ζάρια: $d1, $d2"]); 
+        echo json_encode(['error' => "Λάθος ζαριά! Απόσταση: $distance"]); 
         return;
     }
 
-    // 4. Έλεγχος Προορισμού (Πόρτα)
+    // 4. Έλεγχος Προορισμού (Κανόνας Φεύγα: Μπλοκ αν υπάρχει έστω και 1 αντίπαλος)
     $stmt = $mysqli->prepare("SELECT piece_color, piece_count FROM board WHERE x=?");
     $stmt->bind_param("i", $to);
     $stmt->execute();
     $dest = $stmt->get_result()->fetch_assoc();
 
     if($dest && $dest['piece_count'] > 0 && $dest['piece_color'] != $pCode) {
-        echo json_encode(['error' => 'Η θέση είναι πιασμένη (Πόρτα)!']); return;
+        echo json_encode(['error' => 'Η θέση είναι πιασμένη από αντίπαλο!']); return;
     }
 
     // 5. Εκτέλεση Κίνησης
@@ -107,7 +99,7 @@ function move_piece($from, $to, $playerColor) {
     $mysqli->query("UPDATE board SET piece_color = NULL WHERE x=$from AND piece_count=0");
     
     if (!$dest || $dest['piece_count'] == 0) {
-        $mysqli->query("UPDATE board SET piece_count = 1, piece_color='$pCode' WHERE x=$to");
+        $mysqli->query("INSERT INTO board (x, piece_color, piece_count) VALUES ($to, '$pCode', 1) ON DUPLICATE KEY UPDATE piece_count=1, piece_color='$pCode'");
     } else {
         $mysqli->query("UPDATE board SET piece_count = piece_count + 1 WHERE x=$to");
     }
@@ -117,15 +109,23 @@ function move_piece($from, $to, $playerColor) {
         $mysqli->query("UPDATE game_status SET $dieCol = NULL");
     }
 
-    // 7. Αλλαγή Σειράς (αν τελείωσαν τα ζάρια)
+    // 7. Αλλαγή Σειράς και ΤΕΛΟΣ ΠΑΙΧΝΙΔΙΟΥ (Προσωρινό)
     $s = $mysqli->query("SELECT * FROM game_status")->fetch_assoc();
     if(empty($s['dice1']) && empty($s['dice2'])) {
+        
+        // Αν έπαιξαν τα Μαύρα (B), τότε τέλος το test
+        if ($pCode == 'B') {
+            echo json_encode(['game_over' => true]);
+            return;
+        }
+
         $next = ($pCode == 'W') ? 'B' : 'W';
         $mysqli->query("UPDATE game_status SET p_turn='$next'");
     }
 
     show_status();
 }
+
 
 function show_board() {
     global $mysqli;
@@ -145,7 +145,28 @@ function clear_table() {
 
 function start_new_game() {
     global $mysqli;
-    $mysqli->query("call clean_board()");
+
+    // 1. Ενημέρωση κατάστασης παιχνιδιού
+    // Ορίζουμε ότι το παιχνίδι ξεκίνησε (started), είναι η σειρά των Άσπρων (W)
+    // και μηδενίζουμε τα ζάρια.
+    $mysqli->query("UPDATE game_status SET status='started', p_turn='W', dice1=NULL, dice2=NULL");
+
+    // 2. Καθαρισμός Ταμπλό (Σβήνουμε ό,τι υπάρχει)
+    $mysqli->query("DELETE FROM board");
+
+    // 3. Τοποθέτηση Πούλιων (Στήσιμο ΦΕΥΓΑ)
+    
+    // ΛΕΥΚΑ (White): Ξεκινάνε από το 24 και πάνε προς το 1 (σύμφωνα με το JS: start - steps)
+    // Βάζουμε 15 πούλια στη θέση 24.
+    $sql_white = "INSERT INTO board (x, piece_color, piece_count) VALUES (24, 'W', 15)";
+    $mysqli->query($sql_white);
+
+    // ΜΑΥΡΑ (Black): Ξεκινάνε από το 12 και πάνε προς το 24 (σύμφωνα με το JS: start + steps)
+    // Βάζουμε 15 πούλια στη θέση 12 (διαγώνια απέναντι από το 24).
+    $sql_black = "INSERT INTO board (x, piece_color, piece_count) VALUES (12, 'B', 15)";
+    $mysqli->query($sql_black);
+
+    // Επιστροφή της νέας κατάστασης στο Frontend
     show_status();
 }
 
