@@ -1,4 +1,4 @@
-/* style.css - Τελική Έκδοση */
+/* style.css - Τελική Διορθωμένη Έκδοση */
 
 body {
     background-color: #2c3e50;
@@ -119,16 +119,16 @@ h1 { color: white; }
     font-weight: bold;
     color: #333;
     box-shadow: 3px 3px 5px rgba(0,0,0,0.3);
-    transition: all 0.3s ease; /* ΝΕΟ: Ομαλή μετάβαση */
+    transition: all 0.3s ease; 
 }
 
-/* ΝΕΟ: Ζάρι που έχει παιχτεί (Σβησμένο) */
+/* Ζάρι που έχει παιχτεί (Σβησμένο) */
 .dice-used {
     background-color: #7f8c8d; /* Γκρι */
     color: #bdc3c7; /* Αχνό γκρι */
     border-color: #555;
     box-shadow: inset 0 0 5px rgba(0,0,0,0.5);
-    transform: scale(0.9); /* Λίγο πιο μικρό */
+    transform: scale(0.9); 
 }
 
 /* Κουμπί για τα ζάρια */
@@ -152,8 +152,14 @@ h1 { color: white; }
     border: 2px solid #000;
     margin: 2px auto;
     box-shadow: 2px 2px 5px rgba(0,0,0,0.5);
-    transition: transform 0.2s; 
+    transition: all 0.2s; /* Changed to ALL to animate color too */
+    flex-shrink: 0;       
+    width: 80%;           
+    aspect-ratio: 1 / 1;  
+    margin: 2px 0;        
+    border-radius: 50%;   
 }
+
 .white-piece { background-color: #fff; }
 .black-piece { background-color: #222; }
 
@@ -244,33 +250,66 @@ h1 { color: white; }
 }
 
 
-/* --- 8. HIGHLIGHTS & SUGGESTIONS (ΟΙ ΝΕΕΣ ΑΛΛΑΓΕΣ) --- */
+/* --- 8. HIGHLIGHTS & SUGGESTIONS (ΔΙΟΡΘΩΜΕΝΟ ΜΕ INSET SHADOW) --- */
 
-/* Επιλεγμένο Πούλι - Έντονο Κίτρινο Neon */
+/* Βασικό στυλ για το επιλεγμένο πούλι */
 .selected-piece {
-    border: 3px solid #ffeb3b !important; 
-    box-shadow: 0 0 15px #ffeb3b, inset 0 0 10px #ffeb3b;
-    z-index: 100;
-    transform: scale(1.15); /* Μεγαλώνει λίγο για να ξεχωρίζει */
+    z-index: 1000 !important; /* Να είναι σίγουρα πάνω από όλα */
+    transform: scale(1.2);
 }
+
+/* ΕΙΔΙΚΟΣ ΚΑΝΟΝΑΣ ΓΙΑ ΤΟ ΛΕΥΚΟ ΠΟΥΛΙ */
+/* Χρησιμοποιούμε box-shadow inset για να καλύψουμε το λευκό */
+.white-piece.selected-piece {
+    /* 1. Αλλάζουμε το περίγραμμα σε έντονο πορτοκαλί */
+    border: 3px solid #ff9800 !important;
+    
+    /* 2. ΤΟ ΜΥΣΤΙΚΟ: */
+    /* Το 'inset 0 0 0 20px' γεμίζει όλο το κύκλο με χρυσό χρώμα από μέσα */
+    /* Το δεύτερο μέρος (0 0 15px) κάνει την εξωτερική λάμψη */
+    box-shadow: inset 0 0 0 20px #ffd700, 0 0 15px #ff9800 !important;
+    
+    /* Απενεργοποιούμε το background-color για να αφήσουμε τη σκιά να δουλέψει */
+    background-color: transparent !important;
+}
+
+/* Κανόνας για το ΜΑΥΡΟ ΠΟΥΛΙ (ώστε να μη γίνει όλο κίτρινο, μόνο λάμψη) */
+.black-piece.selected-piece {
+    border: 3px solid #ff9800 !important;
+    box-shadow: 0 0 15px #ffd700, 0 0 5px #ff9800 !important;
+}
+
 
 /* Πιθανή Θέση (Suggestion) - Πράσινο */
 .possible-move {
-    background-color: rgba(46, 204, 113, 0.6) !important; /* Πράσινο ημιδιάφανο */
+    background-color: rgba(46, 204, 113, 0.6) !important;
     border: 2px dashed #2ecc71;
     cursor: pointer;
     box-shadow: inset 0 0 10px #2ecc71;
     animation: pulse-green 1.5s infinite;
 }
 
-/* Animation για να "αναπνέει" το πράσινο κουτάκι */
 @keyframes pulse-green {
     0% { background-color: rgba(46, 204, 113, 0.4); }
     50% { background-color: rgba(46, 204, 113, 0.7); }
     100% { background-color: rgba(46, 204, 113, 0.4); }
 }
 
-/* Όταν περνάς το ποντίκι πάνω από πιθανή θέση */
 .possible-move:hover {
     background-color: rgba(46, 204, 113, 0.9) !important;
+}
+
+/* Στοίχιση */
+.row.top .point {
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-start;
+    align-items: center;
+}
+
+.row.bottom .point {
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-end;
+    align-items: center;
 }
