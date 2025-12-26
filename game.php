@@ -3,43 +3,52 @@
 require_once "lib/dbconnect.php";
 session_start();
 
-// Έλεγχος Ασφαλείας
+// Έλεγχος Ασφαλείας: Αν δεν υπάρχουν παίκτες στο session και δεν γίνεται Login, διώξε τον χρήστη
 if (!isset($_SESSION['player_white']) || !isset($_SESSION['player_black'])) {
     if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
         $_SESSION['error'] = "Πρέπει να κάνετε Login για να παίξετε!";
-        header("Location: index.php");
+        header("Location: login.php");
         exit();
     }
 }
 
-// Λογική Login
+// Λογική Login (Τρέχει ΜΟΝΟ όταν έρχεσαι από τη φόρμα εισόδου)
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (!empty($_POST['player1']) && !empty($_POST['player2'])) {
         $p1_name = htmlspecialchars($_POST['player1']);
         $p2_name = htmlspecialchars($_POST['player2']);
         $choice  = $_POST['p1_color']; 
 
-        // Εδώ ορίζουμε ποιος είμαι ΕΓΩ σε αυτόν τον browser
+        // 1. Ρύθμιση Session (Ποιος είναι ποιος)
         if ($choice === 'white') {
             $_SESSION['player_white'] = $p1_name; 
             $_SESSION['player_black'] = $p2_name; 
             $_SESSION['my_color'] = 'white'; 
         } else {
-            // Αν επέλεξα "Μαύρα", τότε εγώ (ο παίκτης 1 της φόρμας) είμαι ο Μαύρος
             $_SESSION['player_black'] = $p1_name; 
             $_SESSION['player_white'] = $p2_name; 
             $_SESSION['my_color'] = 'black';
         }
 
-        if (!isset($_SESSION['turn'])) $_SESSION['turn'] = 'white';
+        // 2. >>> RESET ΒΑΣΗΣ ΔΕΔΟΜΕΝΩΝ <<< 
+        // Αυτό λύνει και τα δύο προβλήματά σου!
+        
+        // α) Μηδενισμός Σκορ και Κατάστασης (ώστε να εμφανιστεί το κουμπί 'Έναρξη')
+        $sql_reset_status = "UPDATE game_status SET status='not active', p_turn='W', result=NULL, last_change=NOW(), score_w=0, score_b=0, dice1=NULL, dice2=NULL";
+        $mysqli->query($sql_reset_status);
 
-        // --- ΠΡΟΣΟΧΗ: ΑΦΑΙΡΕΣΑΜΕ ΤΟΝ ΜΗΔΕΝΙΣΜΟ ΑΠΟ ΕΔΩ ---
-        // Ο μηδενισμός θα γίνεται μόνο με το κουμπί "Έναρξη Παιχνιδιού"
-        // έτσι ώστε αν μπει ο 2ος παίκτης να μην χαλάσει το ματς.
-
+        // β) Καθαρισμός του Board (αδειάζουμε τα πούλια για να ξεκινήσουμε καθαρά)
+        // Σημείωση: Αν χρησιμοποιείς stored procedure 'clean_board', μπορείς να καλέσεις αυτήν.
+        // Εδώ κάνουμε manual καθαρισμό για σιγουριά.
+        $sql_clear_board = "DELETE FROM board"; 
+        $mysqli->query($sql_clear_board);
+        
+        // γ) Αρχική τοποθέτηση (προαιρετικό, συνήθως γίνεται στο 'startGame', 
+        // αλλά αν το κάνουμε clear, καλό είναι να είναι άδειο).
+        
     } else {
         $_SESSION['error'] = "Παρακαλώ συμπληρώστε ονόματα!";
-        header("Location: index.php");
+        header("Location: login.php");
         exit();
     }
 }
@@ -50,8 +59,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     <title>Παιχνίδι Φεύγα</title>
     <link rel="stylesheet" type="text/css" href="style.css?v=6">
     <script>
-        const myColor = "<?php echo isset($_SESSION['my_color']) ? $_SESSION['my_color'] : ''; ?>";
+        let myColor = "<?php echo isset($_SESSION['my_color']) ? $_SESSION['my_color'] : ''; ?>";
+        
+        // ΝΕΟ: Ελέγχουμε αν έχει οριστεί το 'game_mode' στο session (θα το κάνουμε στο login.php)
+        const isHotseat = <?php echo (isset($_SESSION['game_mode']) && $_SESSION['game_mode'] === 'hotseat') ? 'true' : 'false'; ?>;
+        
         console.log("My Color is: " + myColor); 
+        console.log("Mode Hotseat: " + isHotseat);
     </script>
     <script src="fevga.js" defer></script> 
 </head>
@@ -107,7 +121,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     </div>
 
     <div id="dice-container">
-        <button id="btn-roll" onclick="rollDice()">Ρίξε τα Ζάρια!</button>
+        <button id="btn-roll" onclick="rollDice()" display="none">Ρίξε τα Ζάρια!</button>
         <div id="dice-display" style="display:none;">
             <div class="dice-box" id="d1">?</div><div class="dice-box" id="d2">?</div>
         </div>
