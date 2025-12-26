@@ -1,8 +1,9 @@
-// fevga.js
+// fevga.js - Η Αρχική Σταθερή Έκδοση (Restore)
 
 let selectedPieceId = null;
 let currentDice = { d1: null, d2: null };
-let isMyTurn = false; // Νέα μεταβλητή για να ξέρουμε αν παίζουμε
+let isMyTurn = false;
+let boardState = []; 
 
 async function updateAll() {
     await checkGameStatus();
@@ -14,24 +15,22 @@ async function refreshBoard() {
     try {
         const response = await fetch('tavli.php/board/');
         const data = await response.json();
-        
-        // 1. Καθαρισμός Τριγώνων
+        boardState = data; 
+
+        // 1. Καθαρισμός
         for(let i=1; i<=24; i++) {
             const point = document.getElementById('p'+i);
             if(point) {
-                point.innerHTML = ''; // Σβήνουμε τα παλιά
-                point.className = 'point'; // Καθαρίζουμε όλα τα classes (suggestions κλπ)
+                point.innerHTML = ''; 
+                point.className = 'point'; // Reset classes
                 
-                // Δημιουργία νέου στοιχείου για να καθαρίσουν τα click events
                 const newPoint = point.cloneNode(true);
                 point.parentNode.replaceChild(newPoint, point);
                 
-                // Click στο κενό τρίγωνο (για κίνηση)
                 newPoint.onclick = () => {
-                   // Κίνηση επιτρέπεται μόνο αν είναι possible-move
-                   if(newPoint.classList.contains('possible-move')) {
-                       handlePointClick(i);
-                   }
+                    if(newPoint.classList.contains('possible-move')) {
+                        handlePointClick(i);
+                    }
                 };
             }
         }
@@ -48,39 +47,33 @@ async function refreshBoard() {
                     const isWhite = pos.piece_color === 'W';
                     piece.className = 'piece ' + (isWhite ? 'white-piece' : 'black-piece');
                     
-                    // Έλεγχος: Είναι δικό μου πούλι;
-                    const isMine = (isWhite && myColor === 'white') || (!isWhite && myColor === 'black');
-                    
-                    // --- HIGHLIGHTS (Κίτρινο) ---
-                    // Αν είναι επιλεγμένο και είναι το πάνω-πάνω
+                    // --- ΕΛΕΓΧΟΣ ΕΠΙΛΟΓΗΣ (YELLOW HIGHLIGHT) ---
+                    // Αν αυτό είναι το πούλι που έχουμε επιλέξει (και είναι το τελευταίο στη στίβα)
                     if (selectedPieceId === currentPos && i === count - 1) {
                         piece.classList.add('selected-piece');
                     }
 
-                    // --- CLICKS & CURSOR ---
+                    // Click Logic
+                    const isMine = (isWhite && myColor === 'white') || (!isWhite && myColor === 'black');
+                    
                     if (isMine) {
-                        // Χεράκι ΜΟΝΟ αν είναι η σειρά μου
-                        if (isMyTurn) {
-                            piece.style.cursor = 'pointer';
-                        } else {
-                            piece.style.cursor = 'not-allowed'; // Απαγορευτικό αν δεν είναι η σειρά μου
-                        }
-
+                        piece.style.cursor = isMyTurn ? 'pointer' : 'not-allowed';
+                        
                         piece.onclick = (e) => {
                             e.stopPropagation(); 
-                            // Αν δεν είναι η σειρά μου, δεν κάνω τίποτα
                             if (!isMyTurn) return;
 
                             if (selectedPieceId !== null && selectedPieceId !== currentPos) {
-                                handlePointClick(currentPos); // Move (Stacking)
+                                // Αν έχω ήδη επιλέξει και πατάω σε άλλο δικό μου πούλι, αλλάζω επιλογή
+                                selectPiece(currentPos); 
                             } else {
-                                selectPiece(currentPos); // Select
+                                // Επιλογή / Ξε-επιλογή
+                                selectPiece(currentPos); 
                             }
                         };
                     } else {
-                        // Αντίπαλα πούλια
                         piece.style.cursor = 'default';
-                        piece.onclick = (e) => e.stopPropagation(); // Απαγόρευση κλικ
+                        piece.onclick = (e) => e.stopPropagation(); 
                     }
                     
                     triangle.appendChild(piece);
@@ -96,60 +89,61 @@ async function refreshBoard() {
     } catch (error) { console.error(error); }
 }
 
-// --- SUGGESTIONS (ΠΡΑΣΙΝΑ ΚΟΥΤΑΚΙΑ) ---
+// --- SUGGESTIONS (Διορθωμένο για να πιάνει τα Μαύρα σωστά) ---
 function showSuggestions(startPos) {
     const d1 = parseInt(currentDice.d1) || 0;
     const d2 = parseInt(currentDice.d2) || 0;
-    const targets = new Set(); // Χρησιμοποιούμε Set για να μην έχουμε διπλότυπα
+    const targets = new Set();
 
-    // Βοηθητική συνάρτηση υπολογισμού στόχου
+    const selectedSquare = boardState.find(sq => parseInt(sq.x) === startPos);
+    // Χρησιμοποιούμε parseInt για να είμαστε σίγουροι ότι συγκρίνουμε αριθμούς
+    const pieceCount = selectedSquare ? parseInt(selectedSquare.piece_count) : 0;
+
+    // --- ΚΑΝΟΝΑΣ ΠΡΩΤΗΣ ΚΙΝΗΣΗΣ ---
+    // Ισχύει αν έχουμε 15 πούλια στη θέση
+    const isFirstMove = (pieceCount === 15);
+
     const getTarget = (start, steps) => {
-        let t;
-        
-        // Debugging: Δες στην κονσόλα τι χρώμα νομίζει ο browser ότι είσαι
-        // console.log("Calculating for:", myColor, "Start:", start, "Steps:", steps);
+        // Και οι δύο πάνε αφαιρετικά στο Φεύγα (προς το 1)
+        let t = start - steps; 
 
-        if (myColor === 'white') {
-            // ΛΕΥΚΑ: Κίνηση προς τα πίσω (π.χ. 24 -> 1)
-            t = start - steps; 
-        } else {
-            // ΜΑΥΡΑ: Κίνηση προς τα εμπρός (π.χ. 1 -> 24)
-            t = start + steps; 
-        }
+        // 1. Έλεγχος Ορίων
+        if (t < 1) return -1; 
 
-        // Έλεγχος Ορίων (Board 1-24)
-        // Αν βγει εκτός (π.χ. < 1 ή > 24), επιστρέφουμε -1 (εκτός αν είναι φάση μαζέματος)
-        if (t < 1 || t > 24) {
-             return -1; 
+        // 2. Έλεγχος ΑΝΤΙΠΑΛΟΥ
+        const targetSquare = boardState.find(sq => parseInt(sq.x) === t);
+        if (targetSquare && parseInt(targetSquare.piece_count) > 0) {
+            // Αν το χρώμα είναι διαφορετικό
+            if (targetSquare.piece_color !== (myColor === 'white' ? 'W' : 'B')) {
+                return -1;
+            }
         }
-        
         return t;
     };
 
-    // 1. Μονές κινήσεις
-    if(d1 > 0) {
-        let t1 = getTarget(startPos, d1);
-        if (t1 !== -1) targets.add(t1);
-    }
-    
-    if(d2 > 0) {
-        let t2 = getTarget(startPos, d2);
-        if (t2 !== -1) targets.add(t2);
-    }
-    
-    // 2. Διπλή κίνηση (Άθροισμα) - Μόνο αν έχουμε και τα δύο ζάρια
-    // Σημείωση: Εδώ χρειάζεται προσοχή, πρέπει να είναι ανοιχτό ΚΑΙ το ενδιάμεσο πάτημα.
-    // Για απλότητα τώρα το προσθέτουμε απευθείας.
-    if(d1 > 0 && d2 > 0) {
-        let tTotal = getTarget(startPos, d1 + d2);
-        if (tTotal !== -1) targets.add(tTotal);
+    // Λογική Υπολογισμού
+    if (isFirstMove && d1 > 0 && d2 > 0) {
+        // ΠΡΩΤΗ ΚΙΝΗΣΗ: Μόνο το άθροισμα
+        let tSum = getTarget(startPos, d1 + d2);
+        if (tSum !== -1) targets.add(tSum);
+    } else {
+        // ΚΑΝΟΝΙΚΗ ΚΙΝΗΣΗ
+        if(d1 > 0) {
+            let t1 = getTarget(startPos, d1);
+            if (t1 !== -1) targets.add(t1);
+        }
+        if(d2 > 0) {
+            let t2 = getTarget(startPos, d2);
+            if (t2 !== -1) targets.add(t2);
+        }
+        if(d1 > 0 && d2 > 0) {
+            let tTotal = getTarget(startPos, d1 + d2);
+            if (tTotal !== -1) targets.add(tTotal);
+        }
     }
 
-    // 3. Ζωγραφίζουμε τα πράσινα
+    // Ζωγράφισμα Πράσινων
     targets.forEach(target => {
-        // ΕΛΕΓΧΟΣ: Είναι η θέση άδεια ή έχει δικό μου πούλι ή μόνο ένα αντίπαλο;
-        // Αυτό λείπει από τον αρχικό σου κώδικα, αλλά προς το παρόν ας φτιάξουμε τα κουτάκια.
-        
         const point = document.getElementById('p' + target);
         if(point) {
             point.classList.add('possible-move');
@@ -159,11 +153,14 @@ function showSuggestions(startPos) {
 
 function selectPiece(position) {
     const posInt = parseInt(position);
+    
+    // Αν πατήσω στο ίδιο, κάνω deselect
     if (selectedPieceId === posInt) {
-        selectedPieceId = null; // Ξε-επιλογή
+        selectedPieceId = null; 
     } else {
         selectedPieceId = posInt;
     }
+    // Κάνουμε refresh για να εφαρμοστεί το 'selected-piece' class (κίτρινο)
     updateAll(); 
 }
 
@@ -188,7 +185,18 @@ async function handlePointClick(targetPosInput) {
             alert(res.error);
         } else {
             selectedPieceId = null; 
-            updateAll(); 
+            
+            // 1. Δείχνουμε την κίνηση
+            await refreshBoard(); 
+
+            // 2. Καθυστέρηση για αίσθηση φυσικής κίνησης
+            setTimeout(async () => {
+                if (res.game_over) {
+                    alert("ΤΕΛΟΣ ΠΑΙΧΝΙΔΙΟΥ (Ολοκληρώθηκαν οι πρώτες κινήσεις)");
+                    return; 
+                }
+                await checkGameStatus();
+            }, 500); 
         }
     } catch (e) { console.error(e); }
 }
@@ -197,17 +205,20 @@ async function handlePointClick(targetPosInput) {
 async function checkGameStatus() {
     try {
         const response = await fetch('tavli.php/status/');
+        if (!response.ok) throw new Error(`Server Error: ${response.status}`);
         const status = await response.json();
 
-        // Ενημέρωση Global μεταβλητών
         currentDice.d1 = status.dice1;
         currentDice.d2 = status.dice2;
         
-        // Έλεγχος: ΕΙΝΑΙ Η ΣΕΙΡΑ ΜΟΥ;
-        isMyTurn = (status.p_turn === 'W' && myColor === 'white') || 
-                   (status.p_turn === 'B' && myColor === 'black');
+        if (typeof isHotseat !== 'undefined' && isHotseat === true) {
+            myColor = (status.p_turn === 'W') ? 'white' : 'black';
+            isMyTurn = true;
+        } else {
+            isMyTurn = (status.p_turn === 'W' && myColor === 'white') || 
+                       (status.p_turn === 'B' && myColor === 'black');
+        }
 
-        // UI Elements
         const btnRoll = document.getElementById('btn-roll');
         const diceDisplay = document.getElementById('dice-display');
         const d1 = document.getElementById('d1'); 
@@ -215,52 +226,39 @@ async function checkGameStatus() {
         const turnW = document.getElementById('turn-label-w');
         const turnB = document.getElementById('turn-label-b');
         const startBtn = document.getElementById('btn-start-game');
-        const gameControls = document.getElementById('game-controls');
+        const gameControls = document.getElementById('game-controls'); 
 
-        // Reset
-        if(btnRoll) btnRoll.style.display = 'none';
         if(turnW) turnW.style.display = 'none';
         if(turnB) turnB.style.display = 'none';
 
         if (status.status === 'not active') {
             if(startBtn) startBtn.style.display = 'inline-block';
-            if(gameControls) gameControls.style.display = 'none';
-            if(diceDisplay) diceDisplay.style.display = 'none';
+            if(btnRoll) btnRoll.style.display = 'none';           
+            if(diceDisplay) diceDisplay.style.display = 'none';   
+            if(gameControls) gameControls.style.display = 'none'; 
+
         } else {
-            if(startBtn) startBtn.style.display = 'none';
+            if(startBtn) startBtn.style.display = 'none';         
             if(gameControls) gameControls.style.display = 'block';
 
-            // Ζάρια Logic
             const hasDice = (status.dice1 !== null || status.dice2 !== null);
             
             if (hasDice) {
                 if(diceDisplay) diceDisplay.style.display = 'block';
+                if(btnRoll) btnRoll.style.display = 'none';
                 
-                if (status.dice1 !== null) {
-                    d1.innerText = status.dice1;
-                    d1.classList.remove('dice-used');
-                } else {
-                    d1.innerText = "-";
-                    d1.classList.add('dice-used');
-                }
+                d1.innerText = (status.dice1 !== null) ? status.dice1 : "-";
+                d1.className = (status.dice1 !== null) ? 'dice-box' : 'dice-box dice-used';
 
-                if (status.dice2 !== null) {
-                    d2.innerText = status.dice2;
-                    d2.classList.remove('dice-used');
-                } else {
-                    d2.innerText = "-";
-                    d2.classList.add('dice-used');
-                }
+                d2.innerText = (status.dice2 !== null) ? status.dice2 : "-";
+                d2.className = (status.dice2 !== null) ? 'dice-box' : 'dice-box dice-used';
             } else {
                 if(diceDisplay) diceDisplay.style.display = 'none';
-                
-                // Κουμπί Roll: Μόνο αν είναι η σειρά μου
-                if(isMyTurn && btnRoll) {
-                    btnRoll.style.display = 'inline-block';
+                if(btnRoll) {
+                    btnRoll.style.display = isMyTurn ? 'inline-block' : 'none';
                 }
             }
 
-            // Turn Labels (Δείχνει τίνος σειρά είναι)
             if (status.p_turn === 'W' && turnW) turnW.style.display = 'block';
             if (status.p_turn === 'B' && turnB) turnB.style.display = 'block';
         }
@@ -268,7 +266,7 @@ async function checkGameStatus() {
         document.getElementById('score-w').innerText = status.score_w || 0;
         document.getElementById('score-b').innerText = status.score_b || 0;
 
-    } catch (error) { console.error(error); }
+    } catch (error) { console.error("Σφάλμα:", error); }
 }
 
 async function startGame() { await fetch('tavli.php/status/', { method: 'POST', body: JSON.stringify({ action: 'start' }) }); updateAll(); }
