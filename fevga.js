@@ -1,9 +1,10 @@
-// fevga.js - Η Αρχική Σταθερή Έκδοση (Restore)
+// fevga.js - Με την ειδική ρύθμιση για 6άρες στην πρώτη κίνηση
 
 let selectedPieceId = null;
 let currentDice = { d1: null, d2: null };
 let isMyTurn = false;
 let boardState = []; 
+let myColor = 'white'; // Default value, updates in checkGameStatus
 
 async function updateAll() {
     await checkGameStatus();
@@ -47,8 +48,7 @@ async function refreshBoard() {
                     const isWhite = pos.piece_color === 'W';
                     piece.className = 'piece ' + (isWhite ? 'white-piece' : 'black-piece');
                     
-                    // --- ΕΛΕΓΧΟΣ ΕΠΙΛΟΓΗΣ (YELLOW HIGHLIGHT) ---
-                    // Αν αυτό είναι το πούλι που έχουμε επιλέξει (και είναι το τελευταίο στη στίβα)
+                    // --- ΕΛΕΓΧΟΣ ΕΠΙΛΟΓΗΣ ---
                     if (selectedPieceId === currentPos && i === count - 1) {
                         piece.classList.add('selected-piece');
                     }
@@ -64,10 +64,8 @@ async function refreshBoard() {
                             if (!isMyTurn) return;
 
                             if (selectedPieceId !== null && selectedPieceId !== currentPos) {
-                                // Αν έχω ήδη επιλέξει και πατάω σε άλλο δικό μου πούλι, αλλάζω επιλογή
                                 selectPiece(currentPos); 
                             } else {
-                                // Επιλογή / Ξε-επιλογή
                                 selectPiece(currentPos); 
                             }
                         };
@@ -81,7 +79,7 @@ async function refreshBoard() {
             }
         });
         
-        // 3. Εμφάνιση Suggestions (Πράσινα)
+        // 3. Εμφάνιση Suggestions
         if (selectedPieceId !== null && isMyTurn) {
             showSuggestions(selectedPieceId);
         }
@@ -89,31 +87,26 @@ async function refreshBoard() {
     } catch (error) { console.error(error); }
 }
 
-// --- SUGGESTIONS (Διορθωμένο για να πιάνει τα Μαύρα σωστά) ---
+// --- SUGGESTIONS (Με τροποποίηση για 6-6 στην πρώτη κίνηση) ---
 function showSuggestions(startPos) {
     const d1 = parseInt(currentDice.d1) || 0;
     const d2 = parseInt(currentDice.d2) || 0;
     const targets = new Set();
 
     const selectedSquare = boardState.find(sq => parseInt(sq.x) === startPos);
-    // Χρησιμοποιούμε parseInt για να είμαστε σίγουροι ότι συγκρίνουμε αριθμούς
     const pieceCount = selectedSquare ? parseInt(selectedSquare.piece_count) : 0;
 
     // --- ΚΑΝΟΝΑΣ ΠΡΩΤΗΣ ΚΙΝΗΣΗΣ ---
-    // Ισχύει αν έχουμε 15 πούλια στη θέση
+    // Ισχύει αν έχουμε 15 πούλια στη θέση (άρα είναι η αρχή για αυτόν τον παίκτη)
     const isFirstMove = (pieceCount === 15);
 
     const getTarget = (start, steps) => {
-        // Και οι δύο πάνε αφαιρετικά στο Φεύγα (προς το 1)
-        let t = start - steps; 
+        let t = start - steps; // Προσοχή: Εδώ κρατάμε τη λογική που είχες (αφαίρεση).
 
-        // 1. Έλεγχος Ορίων
         if (t < 1) return -1; 
 
-        // 2. Έλεγχος ΑΝΤΙΠΑΛΟΥ
         const targetSquare = boardState.find(sq => parseInt(sq.x) === t);
         if (targetSquare && parseInt(targetSquare.piece_count) > 0) {
-            // Αν το χρώμα είναι διαφορετικό
             if (targetSquare.piece_color !== (myColor === 'white' ? 'W' : 'B')) {
                 return -1;
             }
@@ -123,11 +116,23 @@ function showSuggestions(startPos) {
 
     // Λογική Υπολογισμού
     if (isFirstMove && d1 > 0 && d2 > 0) {
-        // ΠΡΩΤΗ ΚΙΝΗΣΗ: Μόνο το άθροισμα
+        // ΠΡΩΤΗ ΚΙΝΗΣΗ: Κανονικά ζητάμε το άθροισμα
         let tSum = getTarget(startPos, d1 + d2);
-        if (tSum !== -1) targets.add(tSum);
+        
+        if (tSum !== -1) {
+            targets.add(tSum); // Αν το άθροισμα (12) είναι ελεύθερο, το προσθέτουμε
+        } else {
+            // *** Η ΤΡΟΠΟΠΟΙΗΣΗ ΣΟΥ ***
+            // Αν το άθροισμα (12) είναι μπλοκαρισμένο ΚΑΙ έχουμε 6-6
+            // Τότε επιτρέπουμε να κινηθεί κατά 6.
+            if (d1 === 6 && d2 === 6) {
+                let tHalf = getTarget(startPos, 6);
+                if (tHalf !== -1) targets.add(tHalf);
+            }
+        }
+
     } else {
-        // ΚΑΝΟΝΙΚΗ ΚΙΝΗΣΗ
+        // ΚΑΝΟΝΙΚΗ ΚΙΝΗΣΗ (Όχι πρώτη)
         if(d1 > 0) {
             let t1 = getTarget(startPos, d1);
             if (t1 !== -1) targets.add(t1);
@@ -154,13 +159,11 @@ function showSuggestions(startPos) {
 function selectPiece(position) {
     const posInt = parseInt(position);
     
-    // Αν πατήσω στο ίδιο, κάνω deselect
     if (selectedPieceId === posInt) {
         selectedPieceId = null; 
     } else {
         selectedPieceId = posInt;
     }
-    // Κάνουμε refresh για να εφαρμοστεί το 'selected-piece' class (κίτρινο)
     updateAll(); 
 }
 
@@ -185,14 +188,10 @@ async function handlePointClick(targetPosInput) {
             alert(res.error);
         } else {
             selectedPieceId = null; 
-            
-            // 1. Δείχνουμε την κίνηση
             await refreshBoard(); 
-
-            // 2. Καθυστέρηση για αίσθηση φυσικής κίνησης
             setTimeout(async () => {
                 if (res.game_over) {
-                    alert("ΤΕΛΟΣ ΠΑΙΧΝΙΔΙΟΥ (Ολοκληρώθηκαν οι πρώτες κινήσεις)");
+                    alert("ΤΕΛΟΣ ΠΑΙΧΝΙΔΙΟΥ");
                     return; 
                 }
                 await checkGameStatus();
@@ -246,10 +245,8 @@ async function checkGameStatus() {
             if (hasDice) {
                 if(diceDisplay) diceDisplay.style.display = 'block';
                 if(btnRoll) btnRoll.style.display = 'none';
-                
                 d1.innerText = (status.dice1 !== null) ? status.dice1 : "-";
                 d1.className = (status.dice1 !== null) ? 'dice-box' : 'dice-box dice-used';
-
                 d2.innerText = (status.dice2 !== null) ? status.dice2 : "-";
                 d2.className = (status.dice2 !== null) ? 'dice-box' : 'dice-box dice-used';
             } else {
