@@ -3,55 +3,47 @@
 require_once "lib/dbconnect.php";
 session_start();
 
-// Έλεγχος Ασφαλείας: Αν δεν υπάρχουν παίκτες στο session και δεν γίνεται Login, διώξε τον χρήστη
-if (!isset($_SESSION['player_white']) || !isset($_SESSION['player_black'])) {
-    if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
-        $_SESSION['error'] = "Πρέπει να κάνετε Login για να παίξετε!";
-        header("Location: login.php");
-        exit();
-    }
+// 1. ΕΛΕΓΧΟΣ ΑΣΦΑΛΕΙΑΣ:
+// Αν δεν υπάρχουν τα ονόματα που έστειλε το login.php, τότε ο χρήστης μπήκε παράνομα.
+if (!isset($_SESSION['player1_name']) || !isset($_SESSION['player2_name'])) {
+    $_SESSION['error'] = "Πρέπει να κάνετε Login για να παίξετε!";
+    header("Location: login.php");
+    exit();
 }
 
-// Λογική Login (Τρέχει ΜΟΝΟ όταν έρχεσαι από τη φόρμα εισόδου)
-if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    if (!empty($_POST['player1']) && !empty($_POST['player2'])) {
-        $p1_name = htmlspecialchars($_POST['player1']);
-        $p2_name = htmlspecialchars($_POST['player2']);
-        $choice  = $_POST['p1_color']; 
+// 2. ΑΡΧΙΚΟΠΟΙΗΣΗ ΠΑΙΧΝΙΔΙΟΥ (Τρέχει ΜΟΝΟ την πρώτη φορά που μπαίνεις μετά το Login)
+// Ελέγχουμε αν έχει οριστεί το 'player_white'. Αν όχι, σημαίνει ότι είναι νέο παιχνίδι.
+if (!isset($_SESSION['player_white'])) {
 
-        // 1. Ρύθμιση Session (Ποιος είναι ποιος)
-        if ($choice === 'white') {
-            $_SESSION['player_white'] = $p1_name; 
-            $_SESSION['player_black'] = $p2_name; 
-            $_SESSION['my_color'] = 'white'; 
-        } else {
-            $_SESSION['player_black'] = $p1_name; 
-            $_SESSION['player_white'] = $p2_name; 
-            $_SESSION['my_color'] = 'black';
-        }
+    // Παίρνουμε τα δεδομένα που αποθήκευσε ο "Αστυνομικός" (login.php)
+    $p1_name = $_SESSION['player1_name'];
+    $p2_name = $_SESSION['player2_name'];
+    $choice  = isset($_SESSION['player1_color']) ? $_SESSION['player1_color'] : 'white';
 
-        // 2. >>> RESET ΒΑΣΗΣ ΔΕΔΟΜΕΝΩΝ <<< 
-        // Αυτό λύνει και τα δύο προβλήματά σου!
-        
-        // α) Μηδενισμός Σκορ και Κατάστασης (ώστε να εμφανιστεί το κουμπί 'Έναρξη')
-        $sql_reset_status = "UPDATE game_status SET status='not active', p_turn='W', result=NULL, last_change=NOW(), score_w=0, score_b=0, dice1=NULL, dice2=NULL";
-        $mysqli->query($sql_reset_status);
-
-        // β) Καθαρισμός του Board (αδειάζουμε τα πούλια για να ξεκινήσουμε καθαρά)
-        // Σημείωση: Αν χρησιμοποιείς stored procedure 'clean_board', μπορείς να καλέσεις αυτήν.
-        // Εδώ κάνουμε manual καθαρισμό για σιγουριά.
-        $sql_clear_board = "DELETE FROM board"; 
-        $mysqli->query($sql_clear_board);
-        
-        // γ) Αρχική τοποθέτηση (προαιρετικό, συνήθως γίνεται στο 'startGame', 
-        // αλλά αν το κάνουμε clear, καλό είναι να είναι άδειο).
-        
+    // Ρύθμιση Session (Ποιος είναι ποιος)
+    if ($choice === 'white') {
+        $_SESSION['player_white'] = $p1_name; 
+        $_SESSION['player_black'] = $p2_name; 
+        $_SESSION['my_color'] = 'white'; // Ξεκινάει αυτός που διάλεξε άσπρα
     } else {
-        $_SESSION['error'] = "Παρακαλώ συμπληρώστε ονόματα!";
-        header("Location: login.php");
-        exit();
+        $_SESSION['player_black'] = $p1_name; 
+        $_SESSION['player_white'] = $p2_name; 
+        $_SESSION['my_color'] = 'black';
     }
+
+    // >>> RESET ΒΑΣΗΣ ΔΕΔΟΜΕΝΩΝ <<< 
+    // Αυτό τρέχει ΜΙΑ φορά στην αρχή, οπότε δεν θα μηδενίζει το σκορ στο refresh.
+    
+    // α) Μηδενισμός Σκορ και Κατάστασης
+    $sql_reset_status = "UPDATE game_status SET status='not active', p_turn='W', result=NULL, last_change=NOW(), score_w=0, score_b=0, dice1=NULL, dice2=NULL";
+    $mysqli->query($sql_reset_status);
+
+    // β) Καθαρισμός του Board
+    $sql_clear_board = "DELETE FROM board"; 
+    $mysqli->query($sql_clear_board);
 }
+
+// Από εδώ και κάτω συνεχίζει το HTML της σελίδας...
 ?>
 <!DOCTYPE html>
 <html>
