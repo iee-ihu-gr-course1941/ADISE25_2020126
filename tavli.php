@@ -29,18 +29,88 @@ function handle_board($method) {
 }
 
 function handle_status($method, $input) {
-    if($method=='GET') show_status();
+    global $mysqli; 
+
+    if($method=='GET') {
+        show_status();
+    } 
     elseif($method=='POST') {
-        if(isset($input['action'])) {
+        
+        // 1. START GAME -> Αρχικό Στήσιμο
+        if(isset($input['action']) && $input['action'] == 'start') {
+            $sql = "UPDATE game_status SET status='first_roll', p_turn=NULL, dice1=NULL, dice2=NULL, result=NULL, score_w=0, score_b=0";
+            $mysqli->query($sql);
+            
+            $mysqli->query("DELETE FROM board");
+
+            // --- ΔΙΟΡΘΩΣΗ ΘΕΣΕΩΝ ---
+            // Άσπρα (W) -> 24 (Πάνω Δεξιά)
+            // Μαύρα (B) -> 12 (Κάτω Αριστερά)
+            $mysqli->query("INSERT INTO board (x, piece_color, piece_count) VALUES (24, 'W', 15), (12, 'B', 15)");
+
+            header('Content-Type: application/json');
+            echo json_encode(['status' => 'first_roll']);
+        }
+        
+        // 2. ROLL FIRST (Βήμα-Βήμα)
+        elseif(isset($input['action']) && $input['action'] == 'roll_first') {
+            
+            // Βλέπουμε ποιος έχει ρίξει ήδη
+            $res = $mysqli->query("SELECT dice1, dice2 FROM game_status");
+            $row = $res->fetch_assoc();
+            
+            $d1 = $row['dice1'];
+            $d2 = $row['dice2'];
+            $status = 'first_roll';
+            $next_turn = NULL;
+
+            // Φάση 1: Ρίχνει ο Πρώτος (d1)
+            if ($d1 === NULL) {
+                $d1 = rand(1, 6);
+                $sql = "UPDATE game_status SET dice1=$d1 WHERE status='first_roll'";
+                $mysqli->query($sql);
+            } 
+            // Φάση 2: Ρίχνει ο Δεύτερος (d2) και συγκρίνουμε
+            elseif ($d1 !== NULL && $d2 === NULL) {
+                $d2 = rand(1, 6);
+                
+                if ($d1 > $d2) {
+                    $next_turn = 'W';
+                    $status = 'started';
+                } elseif ($d2 > $d1) {
+                    $next_turn = 'B';
+                    $status = 'started';
+                } else {
+                    // Ισοπαλία: Μηδενισμός για να ξαναρίξουν
+                    $mysqli->query("UPDATE game_status SET dice1=NULL, dice2=NULL WHERE status='first_roll'");
+                    header('Content-Type: application/json');
+                    echo json_encode(['status' => 'first_roll', 'dice1' => null, 'dice2' => null, 'message' => 'tie']);
+                    return;
+                }
+
+                // ΑΠΟΘΗΚΕΥΣΗ ΝΙΚΗΤΗ ΚΑΙ ΚΑΘΑΡΙΣΜΟΣ ΖΑΡΙΩΝ
+                // Σημαντικό: Μηδενίζουμε τα dice1/dice2 ώστε να εμφανιστεί το κουμπί "Ρίξε τα ζάρια" για την κίνηση!
+                $turn_val = $next_turn ? "'$next_turn'" : "NULL";
+                $sql = "UPDATE game_status SET dice1=NULL, dice2=NULL, status='$status', p_turn=$turn_val";
+                $mysqli->query($sql);
+            }
+
+            header('Content-Type: application/json');
+            echo json_encode(['status' => $status, 'dice1' => $d1, 'dice2' => $d2, 'p_turn' => $next_turn]);
+        }
+        
+        // 3. ΥΠΟΛΟΙΠΑ ACTIONS
+        elseif(isset($input['action'])) {
             if($input['action'] == 'surrender') surrender($input['color']);
-            elseif($input['action'] == 'start') start_new_game();
             elseif($input['action'] == 'move') {
-                // Μετατροπή σε ακέραιους για σιγουριά
                 $from = intval($input['from']);
                 $to = intval($input['to']);
                 move_piece($from, $to, $input['color']);
             }
-        } else {
+        } 
+        
+        // 4. ROLL DICE (Κανονικό)
+        else {
             roll_dice();
         }
     }
