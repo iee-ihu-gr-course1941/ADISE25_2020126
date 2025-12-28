@@ -1,6 +1,43 @@
 <?php
-// login.php (Πρώην index.php)
+// login.php
 session_start();
+
+// --- ΚΑΘΑΡΙΣΜΟΣ (Fix για το θέμα με τα παλιά ονόματα) ---
+// Αν μπούμε στη σελίδα χωρίς να πατήσουμε κουμπί (GET), καθαρίζουμε τα παλιά session data
+if ($_SERVER["REQUEST_METHOD"] == "GET") {
+    $temp_error = isset($_SESSION['error']) ? $_SESSION['error'] : '';
+    $temp_mode = isset($_SESSION['game_mode']) ? $_SESSION['game_mode'] : '';
+    
+    session_unset(); 
+    
+    $_SESSION['game_mode'] = $temp_mode;
+    if($temp_error) $_SESSION['error'] = $temp_error;
+}
+
+if ($_SERVER["REQUEST_METHOD"] == "POST") {
+    $p1 = isset($_POST['player1']) ? trim($_POST['player1']) : '';
+    $p2 = isset($_POST['player2']) ? trim($_POST['player2']) : '';
+    
+    $p1_color = isset($_POST['p1_color']) ? $_POST['p1_color'] : 'white';
+
+    if (empty($p1) || empty($p2)) {
+        $_SESSION['error'] = "Παρακαλώ συμπληρώστε έγκυρα ονόματα (όχι μόνο κενά)!";
+        header("Location: login.php"); 
+        exit();
+    }
+
+    if ($p1 === $p2) {
+        $_SESSION['error'] = "Οι παίκτες δεν μπορούν να έχουν το ίδιο όνομα!";
+        header("Location: login.php");
+        exit();
+    }
+
+    $_SESSION['player1_name'] = $p1;
+    $_SESSION['player2_name'] = $p2;
+    $_SESSION['player1_color'] = $p1_color;
+    header("Location: game.php");
+    exit();
+}
 
 // 1. Λήψη του Mode από το URL (αν υπάρχει) και αποθήκευση στο Session
 if (isset($_GET['mode'])) {
@@ -86,7 +123,7 @@ if (isset($_SESSION['error'])) {
     
     <?php if(!empty($error)) { echo "<p style='color:red; font-weight:bold;'>$error</p>"; } ?>
     
-    <form action="game.php" method="POST">
+    <form action="login.php" method="POST">
     
         <div class="form-group">
             <label for="player1">Όνομα Παίκτη 1:</label>
