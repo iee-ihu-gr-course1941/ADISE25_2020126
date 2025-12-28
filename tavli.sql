@@ -94,3 +94,9 @@ BEGIN
 END //
 
 DELIMITER ;
+
+
+ALTER TABLE game_status 
+  MODIFY COLUMN 
+  status ENUM('not active', 'first_roll', 'started', 'ended', 'aborted') 
+  DEFAULT 'not active';
