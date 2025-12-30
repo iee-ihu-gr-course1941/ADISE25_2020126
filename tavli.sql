@@ -1,5 +1,9 @@
--- 1. Πίνακας Παικτών (Players)
-DROP TABLE IF EXISTS `players`;
+-- 1. ΔΗΜΙΟΥΡΓΙΑ ΒΑΣΗΣ
+DROP DATABASE IF EXISTS tavli;
+CREATE DATABASE tavli;
+USE tavli;
+
+-- 2. ΠΙΝΑΚΑΣ ΠΑΙΚΤΩΝ
 CREATE TABLE `players` (
   `username` varchar(20) NOT NULL,
   `piece_color` enum('B','W') DEFAULT NULL,
@@ -8,26 +12,26 @@ CREATE TABLE `players` (
   PRIMARY KEY (`username`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8;
 
--- 2. Πίνακας Κατάστασης Παιχνιδιού (Game Status)
-DROP TABLE IF EXISTS `game_status`;
+-- 3. ΠΙΝΑΚΑΣ ΚΑΤΑΣΤΑΣΗΣ ΠΑΙΧΝΙΔΙΟΥ
 CREATE TABLE `game_status` (
-  `status` enum('not active','initialized','started','ended','aborted') NOT NULL DEFAULT 'not active',
+  `status` enum('not active','first_roll','initialized','started','ended','aborted') NOT NULL DEFAULT 'not active',
   `p_turn` enum('B','W') DEFAULT NULL,
   `result` enum('B','W','D') DEFAULT NULL,
   `dice1` tinyint DEFAULT NULL,
   `dice2` tinyint DEFAULT NULL,
   `w_off` tinyint DEFAULT 0, 
   `b_off` tinyint DEFAULT 0,
+  `score_w` tinyint DEFAULT 0, 
+  `score_b` tinyint DEFAULT 0,
   `last_change` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp()
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8;
 
 -- Αρχική εγγραφή
 INSERT INTO `game_status` 
-(`status`, `p_turn`, `result`, `dice1`, `dice2`, `w_off`, `b_off`) VALUES 
-('not active', NULL, NULL, NULL, NULL, 0, 0);
+(`status`, `p_turn`, `result`, `dice1`, `dice2`, `w_off`, `b_off`, `score_w`, `score_b`) VALUES 
+('not active', NULL, NULL, NULL, NULL, 0, 0, 0, 0);
 
--- 3. Πίνακας Ταμπλό (Board)
-DROP TABLE IF EXISTS `board`;
+-- 4. ΠΙΝΑΚΑΣ ΤΑΜΠΛΟ
 CREATE TABLE `board` (
   `x` tinyint(4) NOT NULL,
   `piece_color` enum('B','W') DEFAULT NULL,
@@ -35,53 +39,40 @@ CREATE TABLE `board` (
   PRIMARY KEY (`x`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8;
 
--- Γέμισμα θέσεων
+-- Γέμισμα θέσεων (Αρχικά άδειες)
 INSERT INTO `board` (`x`, `piece_count`, `piece_color`) VALUES 
 (1,0,null),(2,0,null),(3,0,null),(4,0,null),(5,0,null),(6,0,null),
 (7,0,null),(8,0,null),(9,0,null),(10,0,null),(11,0,null),(12,0,null),
 (13,0,null),(14,0,null),(15,0,null),(16,0,null),(17,0,null),(18,0,null),
 (19,0,null),(20,0,null),(21,0,null),(22,0,null),(23,0,null),(24,0,null);
 
--- 4. Διαδικασία Reset (ΤΟ ΔΙΟΡΘΩΜΕΝΟ ΚΟΜΜΑΤΙ)
+-- 5. ΔΙΑΔΙΚΑΣΙΕΣ (PROCEDURES)
 DELIMITER //
 
+-- Διαδικασία: Στήσιμο ΦΕΥΓΑ (Start Game)
 DROP PROCEDURE IF EXISTS clean_board//
-
 CREATE PROCEDURE clean_board()
 BEGIN
     -- 1. Αδειάζουμε όλο το ταμπλό
     UPDATE board SET piece_count = 0, piece_color = null;
 
-    -- 2. Στήσιμο ΦΕΥΓΑ (ΔΙΟΡΘΩΜΕΝΟ)
-    
-    -- ΛΕΥΚΑ (Παίκτης 1 - Κάτω): 
-    -- Ξεκινάνε από την Πάνω Δεξιά γωνία -> Θέση 24
+    -- 2. Στήσιμο ΦΕΥΓΑ
+    -- ΛΕΥΚΑ (Παίκτης 1 - Κάτω): Ξεκινάνε από την Πάνω Δεξιά γωνία -> Θέση 24
     UPDATE board 
     SET piece_count = 15, piece_color = 'W' 
     WHERE x = 24;
 
-    -- ΜΑΥΡΑ (Παίκτης 2 - Πάνω): 
-    -- Ξεκινάνε από την Κάτω Αριστερά γωνία -> Θέση 12
+    -- ΜΑΥΡΑ (Παίκτης 2 - Πάνω): Ξεκινάνε από την Κάτω Αριστερά γωνία -> Θέση 12
     UPDATE board 
     SET piece_count = 15, piece_color = 'B' 
     WHERE x = 12;
     
-    -- 3. Ενημέρωση Status
+    -- 3. Ενημέρωση Status (Ξεκινάει το παιχνίδι)
     UPDATE game_status 
     SET status='started', p_turn='W', dice1=NULL, dice2=NULL, result=NULL;
-    
 END //
 
-DELIMITER ;
-
--- Προσθέτουμε στήλες για το σκορ
-ALTER TABLE `game_status` 
-ADD COLUMN `score_w` tinyint DEFAULT 0, 
-ADD COLUMN `score_b` tinyint DEFAULT 0;
-
-DELIMITER //
-
--- Διαδικασία που ΑΔΕΙΑΖΕΙ τελείως το τραπέζι (κατάσταση αναμονής)
+-- Διαδικασία: Καθαρισμός Τραπεζιού (Reset/Waiting)
 DROP PROCEDURE IF EXISTS clear_game//
 CREATE PROCEDURE clear_game()
 BEGIN
@@ -94,9 +85,3 @@ BEGIN
 END //
 
 DELIMITER ;
-
-
-ALTER TABLE game_status 
-  MODIFY COLUMN 
-  status ENUM('not active', 'first_roll', 'started', 'ended', 'aborted') 
-  DEFAULT 'not active';
