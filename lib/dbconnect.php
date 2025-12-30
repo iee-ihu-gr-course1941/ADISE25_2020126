@@ -14,7 +14,7 @@ if(gethostname()=='users.iee.ihu.gr') {
     $mysqli = new mysqli('mysql.iee.ihu.gr', $user, $pass, $db);
 } else {
     // Τοπικά στον υπολογιστή μας (XAMPP)
-    $mysqli = new mysqli($host, $user, $pass, $db);
+    $mysqli = new mysqli($host, $user, $pass, $db, port:3307);
 }
 
 // Έλεγχος αν πέτυχε η σύνδεση
