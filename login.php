@@ -2,7 +2,9 @@
 // login.php
 session_start();
 
-// --- ΚΑΘΑΡΙΣΜΟΣ SESSION ---
+// --- ΚΑΘΑΡΙΣΜΟΣ SESSION --- Όταν κάποιος μπαίνει στην σελίδα χωρίς να έχει πατήσει το κουμπί.
+// Κρατάει προσωρινά backup error και mode. Κάνουμε νέο session με ναέα δεδομένα και βάζουμε στο νέο session τα προηγούμενα 
+// error και mode.
 if ($_SERVER["REQUEST_METHOD"] == "GET") {
     $temp_error = isset($_SESSION['error']) ? $_SESSION['error'] : '';
     $temp_mode = isset($_SESSION['game_mode']) ? $_SESSION['game_mode'] : '';
@@ -11,12 +13,12 @@ if ($_SERVER["REQUEST_METHOD"] == "GET") {
     if($temp_error) $_SESSION['error'] = $temp_error;
 }
 
-// --- ΕΛΕΓΧΟΣ ΔΕΔΟΜΕΝΩΝ ---
 if ($_SERVER["REQUEST_METHOD"] == "POST") {
+    //Ternary operatior -> Σε μία γραμμή
     $p1 = isset($_POST['player1']) ? trim($_POST['player1']) : '';
     $p2 = isset($_POST['player2']) ? trim($_POST['player2']) : '';
-    // Παίρνουμε το χρώμα του P1. Το χρώμα του P2 θα υπολογιστεί αυτόματα στο game.php
     $p1_color = isset($_POST['p1_color']) ? $_POST['p1_color'] : 'white';
+    $p2_color = ($p1_color === 'white') ? 'black' : 'white';
 
     if (empty($p1) || empty($p2)) {
         $_SESSION['error'] = "Παρακαλώ συμπληρώστε έγκυρα ονόματα!";
@@ -29,6 +31,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
         exit();
     }
 
+    //Αν δεν βρει λάθος...
     $_SESSION['player1_name'] = $p1;
     $_SESSION['player2_name'] = $p2;
     $_SESSION['player1_color'] = $p1_color;
@@ -42,6 +45,7 @@ if (isset($_GET['mode'])) {
     $_SESSION['game_mode'] = $_GET['mode']; 
 }
 
+//Αν κάποιος προσπαθήσει να μπει χωρίς να έχει επιλέξει mode, επιστρέφει στην αρχική σελίδα.
 if (!isset($_SESSION['game_mode'])) { 
     header("Location: index.php"); 
     exit(); 
@@ -105,26 +109,20 @@ unset($_SESSION['error']);
 </div>
 
 <script>
-    // --- ΑΜΦΙΔΡΟΜΗ ΑΥΤΟΜΑΤΗ ΑΛΛΑΓΗ ΧΡΩΜΑΤΟΣ ---
     const p1Select = document.getElementById('p1_color');
     const p2Select = document.getElementById('p2_color_display');
 
-    // Συνάρτηση που συγχρονίζει τα χρώματα ανάλογα με το ποιο άλλαξε
     function syncColors(changedElement) {
         if (changedElement === p1Select) {
-            // Αν άλλαξε ο P1, ενημέρωσε τον P2 στο αντίθετο
             p2Select.value = (p1Select.value === 'white') ? 'black' : 'white';
         } else {
-            // Αν άλλαξε ο P2, ενημέρωσε τον P1 στο αντίθετο
             p1Select.value = (p2Select.value === 'white') ? 'black' : 'white';
         }
     }
 
-    // Προσθήκη listeners και στα δύο select
     p1Select.addEventListener('change', function() { syncColors(this); });
     p2Select.addEventListener('change', function() { syncColors(this); });
 
-    // Αρχικός συγχρονισμός (με βάση την default επιλογή του P1)
     syncColors(p1Select);
 </script>
 
