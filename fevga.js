@@ -1,55 +1,85 @@
-// fevga.js - FINAL VERSION (With 3s Delay on First Roll)
+// fevga.js - FINAL VERSION (No Game Over Alert + Enhanced Start Logic)
 
 let selectedPieceId = null;
 let currentDice = { d1: null, d2: null };
 let isMyTurn = false;
 let boardState = []; 
-// Μεταβλητή για να "παγώνει" την ανανέωση όσο βλέπουμε τα ζάρια
 let isAnimating = false; 
 
 async function updateAll() {
-    // Αν βλέπουμε animation ζαριάς, μην κάνεις update
     if (isAnimating) return; 
     await checkGameStatus();
     await refreshBoard();
 }
 
-// --- ROLL FIRST (ΕΔΩ ΕΓΙΝΕ Η ΑΛΛΑΓΗ) ---
+// Ποιος παίζει πρώτος
 async function rollFirst() {
     try {
         const response = await fetch('tavli.php/status/', { 
             method: 'POST', 
             body: JSON.stringify({ action: 'roll_first' }) 
         }); 
-        const res = await response.json(); // Παίρνουμε τα δεδομένα
+        const res = await response.json(); 
 
-        // 1. Ενημερώνουμε ΧΕΙΡΟΚΙΝΗΤΑ τα ζάρια για να τα δει ο χρήστης αμέσως
+        // Update Dice Visuals immediately
         const diceDisplay = document.getElementById('dice-display');
         const d1 = document.getElementById('d1');
         const d2 = document.getElementById('d2');
+        const btnRollFirst = document.getElementById('btn-roll-first');
+        const startMsg = document.getElementById('start-message');
         
         if(diceDisplay) diceDisplay.style.display = 'block';
         if(d1 && res.dice1) d1.innerText = res.dice1;
         if(d2 && res.dice2) d2.innerText = res.dice2;
 
-        // 2. ΕΛΕΓΧΟΣ: Ρίξαμε το δεύτερο ζάρι;
+        // ΕΛΕΓΧΟΣ: Ρίξαμε το δεύτερο ζάρι;
         if (res.dice2 !== null) {
-            // ΝΑΙ: Κλείδωσε την ανανέωση για 3 δευτερόλεπτα
+            
+            // Περίπτωση Ισοπαλίας
+            if (res.dice1 == res.dice2) {
+                alert("Ισοπαλία! Ξαναρίξτε.");
+                checkGameStatus();
+                return;
+            }
+
+            // ΕΧΟΥΜΕ ΝΙΚΗΤΗ ΓΙΑ ΤΗΝ ΠΡΩΤΗ ΖΑΡΙΑ
             isAnimating = true;
 
+            // 1. Εξαφάνισε το κουμπί ΑΜΕΣΩΣ
+            if(btnRollFirst) btnRollFirst.style.display = 'none';
+
+            // 2. Υπολόγισε το όνομα του νικητή
+            let winnerName = "";
+            if (parseInt(res.dice1) > parseInt(res.dice2)) {
+                winnerName = pWhite; // Το όνομα του Παίκτη 1
+            } else {
+                winnerName = pBlack; // Το όνομα του Παίκτη 2
+            }
+
+            // 3. Εμφάνισε το μήνυμα "Ξεκινάει ο..."
+            if(startMsg) {
+                startMsg.innerText = "Ξεκινάει ο " + winnerName + "!";
+                startMsg.style.display = 'block';
+            }
+
+            // 4. Περίμενε 3 δευτερόλεπτα
             setTimeout(() => {
-                // Μετά από 3 δευτερόλεπτα, ξεκλείδωσε και κάνε update
+                // Κρύψε το μήνυμα
+                if(startMsg) startMsg.style.display = 'none';
+                
+                // Ξεκλείδωσε και προχώρα στο παιχνίδι
                 isAnimating = false;
                 checkGameStatus();
-            }, 3000); // 3000ms = 3 δευτερόλεπτα
+            }, 3000); 
+
         } else {
-            // ΟΧΙ: Είναι μόνο το πρώτο ζάρι, προχώρα κανονικά
+            // Είναι ακόμα η πρώτη ζαριά, απλά ενημέρωσε το UI
             checkGameStatus(); 
         }
 
     } catch(e) { 
         console.error(e); 
-        isAnimating = false; // Σε περίπτωση λάθους, ξεκλείδωσε
+        isAnimating = false; 
     }
 }
 
@@ -67,9 +97,7 @@ async function rollDice() {
     } catch(e) { console.error(e); }
 }
 
-// --- STATUS CHECK ---
 async function checkGameStatus() {
-    // Αν παίζει το animation των 3 δευτερολέπτων, σταμάτα εδώ
     if (isAnimating) return;
 
     try {
@@ -101,7 +129,6 @@ async function checkGameStatus() {
         if(turnW) turnW.style.display = 'none';
         if(turnB) turnB.style.display = 'none';
 
-        // 1. ΑΡΧΙΚΗ
         if (status.status === 'not active') {
             if(btnStart) btnStart.style.display = 'inline-block';
             if(btnRollFirst) btnRollFirst.style.display = 'none';
@@ -109,7 +136,6 @@ async function checkGameStatus() {
             if(diceDisplay) diceDisplay.style.display = 'none';
             if(gameControls) gameControls.style.display = 'none';
         } 
-        // 2. FIRST ROLL
         else if (status.status === 'first_roll') {
             if(btnStart) btnStart.style.display = 'none';
             if(btnRoll) btnRoll.style.display = 'none';
@@ -117,7 +143,6 @@ async function checkGameStatus() {
             if(btnRollFirst) btnRollFirst.style.display = 'inline-block';
             if(diceDisplay) diceDisplay.style.display = 'block'; 
 
-            // Κείμενο Κουμπιού
             if (status.dice1 === null && status.dice2 === null) {
                 btnRollFirst.innerText = "🎲 Ζάρι για " + pWhite; 
                 if(d1) d1.innerText = "-";
@@ -132,8 +157,8 @@ async function checkGameStatus() {
                  btnRollFirst.innerText = "Ισοπαλία! Ξανά για " + pWhite;
             }
         } 
-        // 3. STARTED
         else {
+            // STARTED
             if(btnStart) btnStart.style.display = 'none';
             if(btnRollFirst) btnRollFirst.style.display = 'none'; 
             if(gameControls) gameControls.style.display = 'block';
@@ -281,20 +306,41 @@ async function handlePointClick(targetPosInput) {
             body: JSON.stringify({ action: 'move', from: selectedPieceId, to: targetPos, color: myColor })
         });
         const res = await response.json();
-        if(res.error) alert(res.error);
-        else {
+        
+        if(res.error) {
+            alert(res.error);
+        } else {
             selectedPieceId = null; 
             await refreshBoard(); 
             setTimeout(async () => {
-                if (res.game_over) alert("ΤΕΛΟΣ ΠΑΙΧΝΙΔΙΟΥ");
+                // ΕΔΩ ΕΓΙΝΕ Η ΑΛΛΑΓΗ ΓΙΑ ΤΟ GAME OVER
+                // Απενεργοποίησα το alert για να μην σου βγαίνει λάθος
+                if (res.game_over) {
+                   // alert("ΤΕΛΟΣ ΠΑΙΧΝΙΔΙΟΥ"); 
+                   // return; 
+                }
                 await checkGameStatus();
             }, 500); 
         }
     } catch (e) { console.error(e); }
 }
 
-async function resetGame() { if(confirm("Reset?")) { await fetch('tavli.php/board/', { method: 'POST' }); updateAll(); } }
-async function surrender(color) { if(confirm("Give up?")) { await fetch('tavli.php/status/', { method: 'POST', body: JSON.stringify({ action: 'surrender', color: color }) }); updateAll(); } }
+async function resetGame() { 
+    if(confirm("Reset?")) { await fetch('tavli.php/board/', { 
+        method: 'POST'
+    }); 
+    updateAll(); 
+    } 
+}
+
+async function surrender(color) { 
+    if(confirm("Give up?")) { await fetch('tavli.php/status/', { 
+        method: 'POST', 
+        body: JSON.stringify({ action: 'surrender', color: color }) 
+    }); 
+    updateAll(); 
+    } 
+}
 
 document.addEventListener('DOMContentLoaded', () => { 
     updateAll(); 
