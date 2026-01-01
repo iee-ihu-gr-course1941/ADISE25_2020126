@@ -3,14 +3,14 @@
 require_once "lib/dbconnect.php";
 session_start();
 
-// ΕΛΕΓΧΟΣ
+//Ελέγχει αν υπάρχουν ονόματα στην μνήμη. Αν δεν υπάρχουν σημαίνει ότι μπήκε κάποιος απευθείας χωρίς να τα συμπληρώσει
+//και τον στέλνει πίσω στο login.php 
 if (!isset($_SESSION['player1_name']) || !isset($_SESSION['player2_name'])) {
     $_SESSION['error'] = "Πρέπει να κάνετε Login για να παίξετε!";
     header("Location: login.php");
     exit();
 }
 
-// ΑΡΧΙΚΟΠΟΙΗΣΗ
 if (!isset($_SESSION['player_white'])) {
     $p1_name = $_SESSION['player1_name'];
     $p2_name = $_SESSION['player2_name'];
@@ -26,7 +26,10 @@ if (!isset($_SESSION['player_white'])) {
         $_SESSION['my_color'] = 'black';
     }
 
+    //Μηδενίζει τα πάντα. 
+    // Το παιχνίδι δεν έχει αρχίσει ακόμα. Μηδενίζει τα σκορ. Σβήνει τα ζάρια.
     $mysqli->query("UPDATE game_status SET status='not active', p_turn=NULL, result=NULL, score_w=0, score_b=0, dice1=NULL, dice2=NULL");
+    //Αδειάζει τελείως τον πίνακα board. Δεν αφήνει κανένα πούλι μέσα.
     $mysqli->query("DELETE FROM board");
 }
 ?>
@@ -36,7 +39,7 @@ if (!isset($_SESSION['player_white'])) {
 <head>
     <meta charset="UTF-8">
     <title>Το Φεύγα μου</title>
-    <link rel="stylesheet" href="style.css?v=3"> 
+    <link rel="stylesheet" href="style.css?v=4"> 
     <script>
         var myColor = "<?php echo $_SESSION['my_color']; ?>";
         var isHotseat = <?php echo ($_SESSION['game_mode'] === 'hotseat') ? 'true' : 'false'; ?>;
@@ -49,8 +52,8 @@ if (!isset($_SESSION['player_white'])) {
     <div id="scoreboard">
         <table>
             <tr>
-                <th><?php echo $_SESSION['player_white']; ?></th>
-                <th><?php echo $_SESSION['player_black']; ?></th>
+                <th><?php echo $_SESSION['player_white']; ?> (W)</th>
+                <th><?php echo $_SESSION['player_black']; ?> (B)</th>
             </tr>
             <tr>
                 <td id="score-w">0</td>
@@ -60,7 +63,6 @@ if (!isset($_SESSION['player_white'])) {
     </div>
 
     <a href="logout.php" class="btn-exit-top">Έξοδος</a>
-
 
     <div class="game-wrapper">
         
@@ -106,18 +108,21 @@ if (!isset($_SESSION['player_white'])) {
                 <div class="dice-box" id="d2">-</div>
             </div>
 
+            <div id="start-message" style="display:none; font-size: 1.5rem; font-weight:bold; color: #f1c40f; margin: 10px 0;">
+                </div>
+
             <button id="btn-start-game" onclick="startGame()">Έναρξη Παιχνιδιού</button>
             <button id="btn-roll-first" onclick="rollFirst()" style="display:none;">🎲 Ποιος παίζει πρώτος;</button>
             <button id="btn-roll" onclick="rollDice()" style="display:none;">Ρίξε τα Ζάρια!</button>
 
             <div id="game-controls" style="display:none; margin-top:15px;">
-                <button onclick="resetGame()" class="btn-secondary">Νέο Παιχνίδι</button> 
-                <button onclick="updateAll()" class="btn-secondary">Ανανέωση</button>
+                <button onclick="resetGame()" class="btn-secondary">Reset</button> 
+                <button onclick="updateAll()" class="btn-secondary">Refresh</button>
             </div>
         </div>
 
     </div>
 
-    <script src="fevga.js?v=12"></script> 
+    <script src="fevga.js?v=13"></script> 
 </body>
 </html>
