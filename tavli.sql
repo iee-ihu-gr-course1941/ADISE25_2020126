@@ -51,7 +51,6 @@ INSERT INTO `game_status`
 -- ΔΙΑΔΙΚΑΣΙΕΣ (PROCEDURES)
 DELIMITER //
 
--- Διαδικασία: Στήσιμο ΦΕΥΓΑ (Start Game)
 DROP PROCEDURE IF EXISTS clean_board//
 
 CREATE PROCEDURE clean_board()
@@ -82,7 +81,6 @@ BEGIN
         b_off=0;
 END //
 
--- Διαδικασία: Καθαρισμός Τραπεζιού (Reset/Waiting)
 DROP PROCEDURE IF EXISTS clear_game//
 CREATE PROCEDURE clear_game()
 BEGIN
