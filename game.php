@@ -28,6 +28,7 @@ if (!isset($_SESSION['player_white'])) {
 
     //Μηδενίζει τα πάντα. 
     // Το παιχνίδι δεν έχει αρχίσει ακόμα. Μηδενίζει τα σκορ. Σβήνει τα ζάρια.
+    
     //$mysqli->query("UPDATE game_status SET status='not active', p_turn=NULL, result=NULL, score_w=0, score_b=0, dice1=NULL, dice2=NULL");
 
     $mysqli->query("call clean_board()");
