@@ -85,9 +85,14 @@ async function rollFirst() {
 
 async function startGame() { 
     try {
-        await fetch('tavli.php/status/', { method: 'POST', body: JSON.stringify({ action: 'start' }) }); 
+        await fetch('tavli.php/status/', { 
+            method: 'POST', 
+            body: JSON.stringify({ action: 'start' }) 
+        }); 
         updateAll(); 
-    } catch(e) { console.error(e); }
+    } catch(e) { 
+        console.error(e); 
+    }
 }
 
 async function rollDice() { 
