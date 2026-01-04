@@ -1,15 +1,17 @@
 <?php
-// tavli.php
+// tavli.php 
 require_once "lib/dbconnect.php"; 
+require_once "lib/board.php";
+
+$method = $_SERVER['REQUEST_METHOD'];
+$request = explode('/', trim($_SERVER['PATH_INFO']??'', '/'));
+$input = json_decode(file_get_contents('php://input'),true);
+
+//print_r($request);
 header('Content-Type: application/json');
 
-// Ανάγνωση Input
-$method = $_SERVER['REQUEST_METHOD'];
-$input = json_decode(file_get_contents('php://input'), true);
-$request = explode('/', trim($_SERVER['PATH_INFO'] ?? '', '/'));
-$r = array_shift($request);
+$r=array_shift($request);
 
-// Router
 switch ($r) {
     case 'board': 
         handle_board($method); 
@@ -18,88 +20,69 @@ switch ($r) {
         handle_status($method, $input); 
         break;
     default: 
-        http_response_code(404); 
-        echo json_encode(['error' => 'Not Found']);
-        exit;
+        echo json_encode(['error' => 'No route specified']);
+        break;
 }
 
-// --- HANDLERS ---
 function handle_board($method) {
-    if($method=='GET') show_board();
-    elseif($method=='POST') clear_table();
+    if($method=='GET'){ 
+        show_board();
+    }
+    elseif($method=='POST') {
+        reset_board();
+    }
 }
 
 function handle_status($method, $input) {
     global $mysqli; 
-
     if($method=='GET') {
         show_status();
     } 
     elseif($method=='POST') {
-        
-        // 1. START GAME (Αρχικοποίηση)
         if(isset($input['action']) && $input['action'] == 'start') {
-            // Καλεί την SQL Procedure που φτιάξαμε
-            // Αυτή θα διαβάσει τα ζάρια, θα βρει ποιος παίζει και θα στήσει το ταμπλό
             $mysqli->query("CALL clean_board()");
             show_status();
         }
-        
-        // 2. ROLL FIRST (Ποιος παίζει πρώτος)
         elseif(isset($input['action']) && $input['action'] == 'roll_first') {
             handle_roll_first();
         }
-        
-        // 3. MOVE PIECE
         elseif(isset($input['action']) && $input['action'] == 'move') {
             $from = intval($input['from']);
             $to = intval($input['to']);
-            move_piece($from, $to, $input['color']);
+            // Προστασία αν δεν ορίστηκε color
+            $col = isset($input['color']) ? $input['color'] : 'white'; 
+            move_piece($from, $to, $col);
         }
-        
-        // 4. SURRENDER
         elseif(isset($input['action']) && $input['action'] == 'surrender') {
             surrender($input['color']);
         }
-        
-        // 5. ROLL DICE (Κανονική Ζαριά)
         else {
             roll_dice();
         }
     }
 }
 
-// --- LOGIC FUNCTIONS ---
-
-// Διαχείριση "Ποιος παίζει πρώτος"
 function handle_roll_first() {
     global $mysqli;
-    
-    // Βλέπουμε τι υπάρχει ήδη
     $res = $mysqli->query("SELECT dice1, dice2 FROM game_status LIMIT 1");
-    $row = $res->fetch_assoc();
-    $d1 = $row['dice1'];
-    $d2 = $row['dice2'];
+    if($res) {
+        $row = $res->fetch_assoc();
+        $d1 = $row['dice1'];
+        $d2 = $row['dice2'];
 
-    // Αν δεν έχει ρίξει ο πρώτος
-    if ($d1 === NULL) {
-        $d1 = rand(1, 6);
-        $mysqli->query("UPDATE game_status SET dice1=$d1, status='first_roll'");
-    } 
-    // Αν έχει ρίξει ο πρώτος αλλά όχι ο δεύτερος
-    elseif ($d2 === NULL) {
-        $d2 = rand(1, 6);
-        $mysqli->query("UPDATE game_status SET dice2=$d2");
+        if ($d1 === NULL) {
+            $d1 = rand(1, 6);
+            $mysqli->query("UPDATE game_status SET dice1=$d1, status='first_roll'");
+        } elseif ($d2 === NULL) {
+            $d2 = rand(1, 6);
+            $mysqli->query("UPDATE game_status SET dice2=$d2");
+        }
     }
-    // Αν έχουν ρίξει και οι δύο, δεν κάνουμε τίποτα, απλά επιστρέφουμε την κατάσταση
-    
     show_status();
 }
 
 function move_piece($from, $to, $playerColor) {
     global $mysqli;
-    
-    // 1. Έλεγχος Σειράς
     $status = $mysqli->query("SELECT * FROM game_status")->fetch_assoc();
     $pCode = ($playerColor == 'white') ? 'W' : 'B';
     
@@ -107,136 +90,83 @@ function move_piece($from, $to, $playerColor) {
         echo json_encode(['error' => 'Δεν είναι η σειρά σου!']); return;
     }
 
-    // 2. Υπολογισμός Κίνησης (ΦΕΥΓΑ)
-    // Στο Φεύγα ΟΛΟΙ κινούνται αριστερόστροφα (decreasing X).
-    // Οι θέσεις είναι 1-24. Αν κάποιος πάει κάτω από το 1, μαζεύει πούλια.
-    // ΑΛΛΑ: Στο μοντέλο μας (όπως το είχες στο JS), ο Μαύρος ξεκινάει από το 12 και ο Άσπρος από το 24.
-    // Εδώ χρειάζεται ΠΡΟΣΟΧΗ: Η "κυκλική" κίνηση.
-    
-    // Απλοποίηση για το συγκεκριμένο setup:
-    // W: 24 -> 1
-    // B: 12 -> 1 ... και μετά 24 -> 13
-    
-    // Υπολογισμός Ζαριάς που χρειάστηκε
-    // Εδώ υπάρχει δυσκολία γιατί ο Μαύρος κάνει "κύκλο".
-    // Για να μην μπλέξουμε με πολύπλοκα μαθηματικά, θα εμπιστευτούμε ότι το Frontend (JS)
-    // μας στέλνει έγκυρες συντεταγμένες και θα ελέγξουμε απλά αν ταιριάζει με κάποιο ζάρι.
-    
-    $diff = 0;
-    // Ειδική περίπτωση Μαύρου που περνάει από το 1 στο 24; 
-    // Όχι, ας υποθέσουμε απλή αφαίρεση για αρχή, όπως το είχες.
-    $diff = $from - $to; 
-    if ($diff < 0) { // Αν πηγαίνει "ανάποδα"
-         // Στο Φεύγα δεν υπάρχει "ανάποδα" εκτός αν περνάει το όριο 1->24
-         // Ας υποθέσουμε standard backgammon logic (subtraction)
-         // Αν θες συγκεκριμένα rules, θα πρέπει να το δούμε ξανά.
-         // ΓΙΑ ΤΩΡΑ: Δεχόμαστε το from - to.
-    }
+    $diff = $from - $to;
+    if ($diff < 0) $diff = abs($diff); 
 
-    // 3. Έλεγχος Ζαριών
     $diceToUse = []; 
     $d1 = $status['dice1'];
     $d2 = $status['dice2'];
     
-    // Βρίσκουμε ποιο ζάρι ταιριάζει
     if ($d1 == $diff) $diceToUse = ['dice1'];
     elseif ($d2 == $diff) $diceToUse = ['dice2'];
     elseif ($d1 && $d2 && ($d1 + $d2 == $diff)) $diceToUse = ['dice1', 'dice2'];
     else {
-        // Έλεγχος για "Μάζεμα" (Bearing Off)
-        // Αν ο παίκτης είναι στη ζώνη μαζέματος και η ζαριά είναι μεγαλύτερη από τη θέση
-        // Αυτό είναι advanced logic. Για τώρα ας μείνουμε στο απλό.
-        echo json_encode(['error' => "Λάθος ζαριά!"]); 
-        return;
+        echo json_encode(['error' => "Λάθος ζαριά!"]); return;
     }
 
-    // 4. Έλεγχος Προορισμού (ΦΕΥΓΑ: Πόρτες)
-    // Στο Φεύγα, αν υπάρχει ΕΣΤΩ ΚΑΙ ΕΝΑ αντίπαλο πούλι, η θέση είναι μπλοκαρισμένη.
+    // Έλεγχος αν η θέση είναι πιασμένη
     $stmt = $mysqli->prepare("SELECT piece_color, piece_count FROM board WHERE x=?");
     $stmt->bind_param("i", $to);
     $stmt->execute();
     $dest = $stmt->get_result()->fetch_assoc();
 
     if($dest && $dest['piece_count'] > 0 && $dest['piece_color'] != $pCode) {
-        echo json_encode(['error' => 'Η θέση είναι πιασμένη (Πόρτα)!']); return;
+        echo json_encode(['error' => 'Η θέση είναι πιασμένη!']); return;
     }
     
-    // 5. ΕΚΤΕΛΕΣΗ ΚΙΝΗΣΗΣ
-    
-    // Αφαίρεση από το παλιό
+    // Εκτέλεση κίνησης
     $mysqli->query("UPDATE board SET piece_count = piece_count - 1 WHERE x=$from");
     $mysqli->query("UPDATE board SET piece_color = NULL WHERE x=$from AND piece_count=0");
     
-    // Προσθήκη στο νέο
     if (!$dest || $dest['piece_count'] == 0) {
-        // Αν ήταν άδειο ή άδειασε τώρα
          $sql = "INSERT INTO board (x, piece_color, piece_count) VALUES ($to, '$pCode', 1) 
                  ON DUPLICATE KEY UPDATE piece_count=1, piece_color='$pCode'";
          $mysqli->query($sql);
     } else {
-        // Αν είχε ήδη δικά μου
         $mysqli->query("UPDATE board SET piece_count = piece_count + 1 WHERE x=$to");
     }
 
-    // 6. Κάψιμο Ζαριών
+    // Κάψιμο ζαριών
     foreach($diceToUse as $dieCol) {
         $mysqli->query("UPDATE game_status SET $dieCol = NULL");
     }
 
-    // 7. Αλλαγή Σειράς
+    // Αλλαγή σειράς αν τελείωσαν τα ζάρια
     $s = $mysqli->query("SELECT dice1, dice2 FROM game_status")->fetch_assoc();
     if(empty($s['dice1']) && empty($s['dice2'])) {
         $next = ($pCode == 'W') ? 'B' : 'W';
         $mysqli->query("UPDATE game_status SET p_turn='$next'");
     }
-
     show_status();
 }
 
-
-// --- ΒΟΗΘΗΤΙΚΕΣ FUNCTIONS ---
-
-function show_board() {
-    global $mysqli;
-    // Επιστρέφουμε όλες τις θέσεις που έχουν πούλια
-    $res = $mysqli->query("SELECT * FROM board WHERE piece_count > 0");
-    echo json_encode($res->fetch_all(MYSQLI_ASSOC));
-}
 
 function show_status() {
     global $mysqli;
     $res = $mysqli->query("SELECT * FROM game_status LIMIT 1");
-    echo json_encode($res->fetch_assoc());
+    if($res) {
+        echo json_encode($res->fetch_assoc());
+    } else {
+        echo json_encode(['status' => 'error', 'msg' => 'Database error']);
+    }
 }
 
-function clear_table() {
-    global $mysqli;
-    $mysqli->query("CALL clear_game()");
-    show_status();
-}
+
 
 function roll_dice() {
     global $mysqli;
-    // Ελέγχουμε αν έχουν ήδη ριχτεί ζάρια (για να μην κλέβει ο χρήστης)
     $st = $mysqli->query("SELECT dice1 FROM game_status")->fetch_assoc();
-    if($st['dice1'] != NULL) {
-        show_status();
-        return;
-    }
+    if($st['dice1'] != NULL) { show_status(); return; }
     
-    $d1 = rand(1,6); 
-    $d2 = rand(1,6);
+    $d1 = rand(1,6); $d2 = rand(1,6);
     $mysqli->query("UPDATE game_status SET dice1=$d1, dice2=$d2 WHERE status='started'");
     show_status();
 }
 
 function surrender($loser_color) {
     global $mysqli;
-    // Αυξάνουμε το σκορ του αντιπάλου
     $winner_score_col = ($loser_color === 'white') ? 'score_b' : 'score_w';
     $mysqli->query("UPDATE game_status SET $winner_score_col = $winner_score_col + 1, result='aborted'");
-    
-    // Καθαρίζουμε το τραπέζι
     $mysqli->query("CALL clear_game()");
     show_status();
 }
