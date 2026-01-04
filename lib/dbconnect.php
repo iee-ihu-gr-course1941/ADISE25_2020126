@@ -1,5 +1,6 @@
 <?php
 // lib/dbconnect.php
+mysqli_report(MYSQLI_REPORT_ERROR | MYSQLI_REPORT_STRICT);
 
 $host = 'localhost';
 $db = 'tavli'; 
@@ -8,26 +9,25 @@ require_once "db_upass.php";
 $user = $DB_USER;
 $pass = $DB_PASS;
 
-$use_remote_tunnel = true;
+// Το path του Socket που βρήκαμε ότι δουλεύει
+$socket_path = '/home/student/iee/2020/iee2020126/mysql/run/mysql.sock';
 
-if(gethostname()=='users.iee.ihu.gr') {
-    $mysqli = new mysqli('mysql.iee.ihu.gr', $user, $pass, $db);
-} else {
-    if ($use_remote_tunnel) {
-        $mysqli = new mysqli('127.0.0.1', $user, $pass, $db, 3308);
+try {
+    $hostname = gethostname();
+    // Έλεγχος αν είμαστε στον Server
+    if (strpos($hostname, 'users') !== false || strpos($hostname, 'teithe') !== false || strpos($hostname, 'ihu') !== false) {
+        // Σύνδεση με Socket
+        $mysqli = new mysqli('localhost', $user, $pass, $db, 0, $socket_path);
     } else {
-        $local_user = 'root';
-        $local_pass = '';
-        $mysqli = new mysqli('localhost', $local_user, $local_pass, $db, 3307);
+        // Σύνδεση Τοπικά (Localhost)
+        $mysqli = new mysqli('127.0.0.1', $user, $pass, $db, 3308);
     }
-}
+    $mysqli->set_charset("utf8");
 
-// Έλεγχος αν πέτυχε η σύνδεση
-if ($mysqli->connect_errno) {
-    echo "Αποτυχία σύνδεσης στη MySQL: (" .
-    $mysqli->connect_errno . ") " . $mysqli->connect_error;
+} catch (Exception $e) {
+    // Εδώ ΔΕΝ κάνουμε echo για να μην χαλάσει το JSON του παιχνιδιού
+    // Αν αποτύχει, το παιχνίδι θα βγάλει error 500, αλλά δεν θα στείλει σκουπίδια
+    error_log($e->getMessage()); 
+    exit('DB Error');
 }
-
-// Αυτό βοηθάει με τα Ελληνικά στη βάση
-$mysqli->set_charset("utf8");
 ?>
