@@ -1,10 +1,8 @@
 <?php
 // lib/db_upass.php
 
-// Όταν είσαι τοπικά (XAMPP), αυτοί είναι οι στάνταρ κωδικοί:
-$DB_USER = 'root';
-$DB_PASS = '';
+// users.iee.ihu.gr
+$DB_USER = 'iee2020126';
+$DB_PASS = 'Spyrosmysql1';
 
-// Όταν το ανεβάσεις στο users.iee.ihu.gr, θα αλλάξεις αυτό το αρχείο ΜΟΝΟ
-// και θα βάλεις τους κωδικούς της σχολής.
 ?>
