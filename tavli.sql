@@ -19,14 +19,16 @@ INSERT INTO `board` (`x`, `piece_count`, `piece_color`) VALUES
 (19,0,null),(20,0,null),(21,0,null),(22,0,null),(23,0,null),(24,0,null);
 
 -- 2. ΠΙΝΑΚΑΣ PLAYERS (Παίκτες)
-DROP TABLE IF EXISTS `players`;
-CREATE TABLE `players` (
-  `username` varchar(20) NOT NULL,
-  `piece_color` enum('B','W') DEFAULT NULL,
-  `token` varchar(50) DEFAULT NULL,
-  `last_action` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(),
-  PRIMARY KEY (`username`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8;
+CREATE TABLE players (
+    piece_color ENUM('W','B') PRIMARY KEY,
+    username VARCHAR(255),
+    token VARCHAR(255),
+    last_action TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+);
+
+INSERT INTO players (piece_color) VALUES ('W');
+INSERT INTO players (piece_color) VALUES ('B');
+
 
 -- 3. ΠΙΝΑΚΑΣ GAME_STATUS (Κατάσταση Παιχνιδιού)
 DROP TABLE IF EXISTS `game_status`;
