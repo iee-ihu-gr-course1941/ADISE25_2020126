@@ -6,82 +6,6 @@ let isMyTurn = false;
 let boardState = []; 
 let isAnimating = false; 
 
-async function updateAll() {
-    if (isAnimating) return; 
-    await checkGameStatus();
-    await refreshBoard();
-}
-
-// Ποιος παίζει πρώτος
-async function rollFirst() {
-    try {
-        const response = await fetch('tavli.php/status/', { 
-            method: 'POST', 
-            body: JSON.stringify({ action: 'roll_first' }) 
-        }); 
-        const res = await response.json(); 
-
-        // Update Dice Visuals immediately
-        const diceDisplay = document.getElementById('dice-display');
-        const d1 = document.getElementById('d1');
-        const d2 = document.getElementById('d2');
-        const btnRollFirst = document.getElementById('btn-roll-first');
-        const startMsg = document.getElementById('start-message');
-        
-        if(diceDisplay) diceDisplay.style.display = 'block';
-        if(d1 && res.dice1) d1.innerText = res.dice1;
-        if(d2 && res.dice2) d2.innerText = res.dice2;
-
-        // ΕΛΕΓΧΟΣ: Ρίξαμε το δεύτερο ζάρι;
-        if (res.dice2 !== null) {
-            
-            // Περίπτωση Ισοπαλίας
-            if (res.dice1 == res.dice2) {
-                alert("Ισοπαλία! Ξαναρίξτε.");
-                checkGameStatus();
-                return;
-            }
-
-            // ΕΧΟΥΜΕ ΝΙΚΗΤΗ ΓΙΑ ΤΗΝ ΠΡΩΤΗ ΖΑΡΙΑ
-            isAnimating = true;
-
-            // 1. Εξαφάνισε το κουμπί ΑΜΕΣΩΣ
-            if(btnRollFirst) btnRollFirst.style.display = 'none';
-
-            // 2. Υπολόγισε το όνομα του νικητή
-            let winnerName = "";
-            if (parseInt(res.dice1) > parseInt(res.dice2)) {
-                winnerName = pWhite; // Το όνομα του Παίκτη 1
-            } else {
-                winnerName = pBlack; // Το όνομα του Παίκτη 2
-            }
-
-            // 3. Εμφάνισε το μήνυμα "Ξεκινάει ο..."
-            if(startMsg) {
-                startMsg.innerText = "Ξεκινάει ο " + winnerName + "!";
-                startMsg.style.display = 'block';
-            }
-
-            // 4. Περίμενε 3 δευτερόλεπτα
-            setTimeout(() => {
-                // Κρύψε το μήνυμα
-                if(startMsg) startMsg.style.display = 'none';
-                
-                // Ξεκλείδωσε και προχώρα στο παιχνίδι
-                isAnimating = false;
-                checkGameStatus();
-            }, 3000); 
-
-        } else {
-            // Είναι ακόμα η πρώτη ζαριά, απλά ενημέρωσε το UI
-            checkGameStatus(); 
-        }
-
-    } catch(e) { 
-        console.error(e); 
-        isAnimating = false; 
-    }
-}
 
 async function startGame() { 
     try {
@@ -95,12 +19,74 @@ async function startGame() {
     }
 }
 
-async function rollDice() { 
-    try {
-        await fetch('tavli.php/status/', { method: 'POST' }); 
-        checkGameStatus(); 
-    } catch(e) { console.error(e); }
+
+async function updateAll() {
+    if (isAnimating) return; 
+    await checkGameStatus();
+    await refreshBoard();
 }
+
+
+async function refreshBoard() {
+    try {
+        const response = await fetch('tavli.php/board/');
+        if (!response.ok) throw new Error("Board Fetch Error");
+        const data = await response.json();
+        boardState = data; 
+
+        for(let i=1; i<=24; i++) {
+            const point = document.getElementById('p'+i);
+            if(point) {
+                point.innerHTML = ''; 
+                point.className = 'point'; 
+                const newPoint = point.cloneNode(true);
+                point.parentNode.replaceChild(newPoint, point);
+                newPoint.onclick = () => {
+                    if(newPoint.classList.contains('possible-move')) handlePointClick(i);
+                };
+            }
+        }
+
+        data.forEach(pos => {
+            const currentPos = parseInt(pos.x); 
+            const count = parseInt(pos.piece_count);
+            const triangle = document.getElementById('p' + currentPos);
+            
+            if(triangle && count > 0) {
+                for(let i=0; i<count; i++) {
+                    const piece = document.createElement('div');
+                    const isWhite = pos.piece_color === 'W';
+                    piece.className = 'piece ' + (isWhite ? 'white-piece' : 'black-piece');
+                    
+                    if (selectedPieceId === currentPos && i === count - 1) {
+                        piece.classList.add('selected-piece');
+                        piece.style.border = "3px solid #ff9800";
+                        piece.style.boxShadow = "0 0 15px #ffd700";
+                        if(isWhite) piece.style.backgroundColor = "#ffd700";
+                    }
+
+                    const isMine = (isWhite && myColor === 'white') || (!isWhite && myColor === 'black');
+                    if (isMine) {
+                        piece.style.cursor = isMyTurn ? 'pointer' : 'not-allowed';
+                        piece.onclick = (e) => {
+                            e.stopPropagation(); 
+                            if (!isMyTurn) return;
+                            selectPiece(currentPos); 
+                        };
+                    } else {
+                        piece.style.cursor = 'default';
+                        piece.onclick = (e) => e.stopPropagation(); 
+                    }
+                    triangle.appendChild(piece);
+                }
+            }
+        });
+        
+        if (selectedPieceId !== null && isMyTurn) showSuggestions(selectedPieceId);
+    } catch (error) { console.error(error); }
+}
+
+
 
 async function checkGameStatus() {
     if (isAnimating) return;
@@ -198,64 +184,89 @@ async function checkGameStatus() {
     } catch (error) { console.error("Status Error:", error); }
 }
 
-async function refreshBoard() {
-    try {
-        const response = await fetch('tavli.php/board/');
-        if (!response.ok) throw new Error("Board Fetch Error");
-        const data = await response.json();
-        boardState = data; 
 
-        for(let i=1; i<=24; i++) {
-            const point = document.getElementById('p'+i);
-            if(point) {
-                point.innerHTML = ''; 
-                point.className = 'point'; 
-                const newPoint = point.cloneNode(true);
-                point.parentNode.replaceChild(newPoint, point);
-                newPoint.onclick = () => {
-                    if(newPoint.classList.contains('possible-move')) handlePointClick(i);
-                };
+// Ποιος παίζει πρώτος
+async function rollFirst() {
+    try {
+        const response = await fetch('tavli.php/status/', { 
+            method: 'POST', 
+            body: JSON.stringify({ action: 'roll_first' }) 
+        }); 
+        const res = await response.json(); 
+
+        // Update Dice Visuals immediately
+        const diceDisplay = document.getElementById('dice-display');
+        const d1 = document.getElementById('d1');
+        const d2 = document.getElementById('d2');
+        const btnRollFirst = document.getElementById('btn-roll-first');
+        const startMsg = document.getElementById('start-message');
+        
+        if(diceDisplay) diceDisplay.style.display = 'block';
+        if(d1 && res.dice1) d1.innerText = res.dice1;
+        if(d2 && res.dice2) d2.innerText = res.dice2;
+
+        // ΕΛΕΓΧΟΣ: Ρίξαμε το δεύτερο ζάρι;
+        if (res.dice2 !== null) {
+            
+            // Περίπτωση Ισοπαλίας
+            if (res.dice1 == res.dice2) {
+                alert("Ισοπαλία! Ξαναρίξτε.");
+                checkGameStatus();
+                return;
             }
+
+            // ΕΧΟΥΜΕ ΝΙΚΗΤΗ ΓΙΑ ΤΗΝ ΠΡΩΤΗ ΖΑΡΙΑ
+            isAnimating = true;
+
+            // 1. Εξαφάνισε το κουμπί ΑΜΕΣΩΣ
+            if(btnRollFirst) btnRollFirst.style.display = 'none';
+
+            // 2. Υπολόγισε το όνομα του νικητή
+            let winnerName = "";
+            if (parseInt(res.dice1) > parseInt(res.dice2)) {
+                winnerName = pWhite; // Το όνομα του Παίκτη 1
+            } else {
+                winnerName = pBlack; // Το όνομα του Παίκτη 2
+            }
+
+            // 3. Εμφάνισε το μήνυμα "Ξεκινάει ο..."
+            if(startMsg) {
+                startMsg.innerText = "Ξεκινάει ο " + winnerName + "!";
+                startMsg.style.display = 'block';
+            }
+
+            // 4. Περίμενε 3 δευτερόλεπτα
+            setTimeout(() => {
+                // Κρύψε το μήνυμα
+                if(startMsg) startMsg.style.display = 'none';
+                
+                // Ξεκλείδωσε και προχώρα στο παιχνίδι
+                isAnimating = false;
+                checkGameStatus();
+            }, 3000); 
+
+        } else {
+            // Είναι ακόμα η πρώτη ζαριά, απλά ενημέρωσε το UI
+            checkGameStatus(); 
         }
 
-        data.forEach(pos => {
-            const currentPos = parseInt(pos.x); 
-            const count = parseInt(pos.piece_count);
-            const triangle = document.getElementById('p' + currentPos);
-            
-            if(triangle && count > 0) {
-                for(let i=0; i<count; i++) {
-                    const piece = document.createElement('div');
-                    const isWhite = pos.piece_color === 'W';
-                    piece.className = 'piece ' + (isWhite ? 'white-piece' : 'black-piece');
-                    
-                    if (selectedPieceId === currentPos && i === count - 1) {
-                        piece.classList.add('selected-piece');
-                        piece.style.border = "3px solid #ff9800";
-                        piece.style.boxShadow = "0 0 15px #ffd700";
-                        if(isWhite) piece.style.backgroundColor = "#ffd700";
-                    }
-
-                    const isMine = (isWhite && myColor === 'white') || (!isWhite && myColor === 'black');
-                    if (isMine) {
-                        piece.style.cursor = isMyTurn ? 'pointer' : 'not-allowed';
-                        piece.onclick = (e) => {
-                            e.stopPropagation(); 
-                            if (!isMyTurn) return;
-                            selectPiece(currentPos); 
-                        };
-                    } else {
-                        piece.style.cursor = 'default';
-                        piece.onclick = (e) => e.stopPropagation(); 
-                    }
-                    triangle.appendChild(piece);
-                }
-            }
-        });
-        
-        if (selectedPieceId !== null && isMyTurn) showSuggestions(selectedPieceId);
-    } catch (error) { console.error(error); }
+    } catch(e) { 
+        console.error(e); 
+        isAnimating = false; 
+    }
 }
+
+
+
+async function rollDice() { 
+    try {
+        await fetch('tavli.php/status/', { method: 'POST' }); 
+        checkGameStatus(); 
+    } catch(e) { console.error(e); }
+}
+
+
+
 
 function showSuggestions(startPos) {
     const d1 = parseInt(currentDice.d1) || 0;
