@@ -1,4 +1,14 @@
 <?php
+
+function handle_board($method, $input) {
+    if($method=='GET'){
+        show_board();
+    }
+    elseif($method=='POST') {
+        reset_board();
+    }
+}
+
 function show_board() {
     global $mysqli;
     $sql = 'SELECT * FROM board';
@@ -12,7 +22,7 @@ function show_board() {
 
 function reset_board() {
     global $mysqli;
-    $mysqli->query("CALL clear_board()");
+    $mysqli->query("CALL clean_board()");
     show_board();
 }
 
