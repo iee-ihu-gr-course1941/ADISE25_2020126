@@ -1,8 +1,17 @@
 <?php
-    // logout.php
-    session_start();
-    session_unset(); 
-    session_destroy(); 
-    header("Location: index.php");
-    exit();
+require_once "lib/dbconnect.php"; 
+require_once "lib/game_logic.php";
+
+session_start();
+session_destroy();
+
+global $mysqli;
+
+$mysqli->query("CALL clean_board()");
+$sql = "UPDATE players SET username = NULL, token = NULL";
+$mysqli->query($sql);
+reset_status(); 
+
+header("Location: index.php"); 
+exit;
 ?>
