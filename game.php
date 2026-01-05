@@ -74,11 +74,11 @@ if (!isset($_SESSION['player_white'])) {
 
         <div class="board">
             <div class="half-board">
-                <div class="row top">
+                <div class="board-row top">
                     <div id="p13" class="point"></div><div id="p14" class="point"></div><div id="p15" class="point"></div>
                     <div id="p16" class="point"></div><div id="p17" class="point"></div><div id="p18" class="point"></div>
                 </div>
-                <div class="row bottom">
+                <div class="board-row bottom">
                     <div id="p12" class="point"></div><div id="p11" class="point"></div><div id="p10" class="point"></div>
                     <div id="p9" class="point"></div><div id="p8" class="point"></div><div id="p7" class="point"></div>
                 </div>
@@ -87,11 +87,11 @@ if (!isset($_SESSION['player_white'])) {
             <div class="bar"></div>
 
             <div class="half-board">
-                <div class="row top">
+                <div class="board-row top">
                     <div id="p19" class="point"></div><div id="p20" class="point"></div><div id="p21" class="point"></div>
                     <div id="p22" class="point"></div><div id="p23" class="point"></div><div id="p24" class="point"></div>
                 </div>
-                <div class="row bottom">
+                <div class="board-row bottom">
                     <div id="p6" class="point"></div><div id="p5" class="point"></div><div id="p4" class="point"></div>
                     <div id="p3" class="point"></div><div id="p2" class="point"></div><div id="p1" class="point"></div>
                 </div>
