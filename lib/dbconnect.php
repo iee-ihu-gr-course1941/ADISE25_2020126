@@ -13,7 +13,7 @@ if(gethostname() == 'users.iee.ihu.gr') {
     // Σύνδεση με Socket (για τον Server)
     $mysqli = new mysqli($host, $user, $pass, $db, null, '/home/student/iee/2020/iee2020126/mysql/run/mysql.sock');
 } else {
-    // Σύνδεση Τοπικά (XAMPP - Απλή και καθαρή)
+    // Σύνδεση Τοπικά (XAMPP)
     $mysqli = new mysqli($host, $user, $pass, $db, port:3307);
 }
 
