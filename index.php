@@ -2,7 +2,14 @@
 <html lang="el">
 <head>
     <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no"> 
     <title>Το Τάβλι - Επιλογή Παιχνιδιού</title>
+    
+    <link href="bootstrap/bootstrap.min.css" rel="stylesheet">
+    <link href="css/style.css" rel="stylesheet">
+    <script src="bootstrap/jquery-3.2.1.min.js"></script>
+    <script src="bootstrap/bootstrap.min.js"></script>
+
     <style>
         body {
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
@@ -26,6 +33,7 @@
             flex-wrap: wrap;
             justify-content: center;
         }
+        /* Κάνουμε τα κουμπιά να φαίνονται σωστά ακόμα και με Bootstrap */
         .btn-mode {
             padding: 30px 50px;
             font-size: 20px;
@@ -42,6 +50,8 @@
             width: 200px;
             box-shadow: 0 4px 6px rgba(0,0,0,0.3);
         }
+        .btn-mode:hover { color: white; text-decoration: none; } /* Fix για Bootstrap link hover */
+        
         .btn-mode small {
             font-size: 0.7em;
             margin-top: 10px;
@@ -49,28 +59,10 @@
             opacity: 0.9;
         }
         
-        /* Κουμπί Hotseat (Πράσινο) */
-        .btn-local {
-            background-color: #27ae60; 
-        }
-        .btn-local:hover {
-            background-color: #2ecc71;
-            transform: translateY(-5px);
-            box-shadow: 0 6px 12px rgba(0,0,0,0.4);
-        }
+        .btn-local { background-color: #27ae60; }
+        .btn-local:hover { background-color: #2ecc71; transform: translateY(-5px); }
 
-        /* Κουμπί Online (Μπλε - Ανενεργό προς το παρόν) */
-        .btn-online {
-            background-color: #34495e; /* Σκούρο μπλε/γκρι */
-            cursor: not-allowed;
-            opacity: 0.6;
-        }
-        /* Όταν το ενεργοποιήσουμε, θα βγάλουμε τα σχόλια από εδώ:
-        .btn-online:hover {
-            background-color: #3498db;
-            transform: translateY(-5px);
-        }
-        */
+        .btn-online { background-color: #34495e; cursor: not-allowed; opacity: 0.6; }
     </style>
 </head>
 <body>
@@ -78,12 +70,12 @@
     <h1>Καλωσήρθατε στο Τάβλι</h1>
 
     <div class="container">
-        <a href="login.php?mode=hotseat" class="btn-mode btn-local">
+        <a href="login.php?mode=hotseat" class="btn-mode btn-local text-decoration-none">
             <span>🏠 Single PC</span>
             <small>2 Παίκτες στην ίδια οθόνη</small>
         </a>
 
-        <a href="#" class="btn-mode btn-online" onclick="alert('Η Online λειτουργία θα ενεργοποιηθεί σύντομα!'); return false;">
+        <a href="#" class="btn-mode btn-online text-decoration-none" onclick="alert('Η Online λειτουργία θα ενεργοποιηθεί σύντομα!'); return false;">
             <span>🌐 Online</span>
             <small>Multiplayer μέσω δικτύου</small>
         </a>
