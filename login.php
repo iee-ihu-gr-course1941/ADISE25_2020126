@@ -61,6 +61,10 @@ unset($_SESSION['error']);
 <head>
     <meta charset="UTF-8">
     <title>Ρυθμίσεις Παιχνιδιού</title>
+    <link href="bootstrap/bootstrap.min.css" rel="stylesheet">
+    <link href="css/style.css" rel="stylesheet">
+    <script src="bootstrap/jquery-3.2.1.min.js"></script>
+    <script src="bootstrap/bootstrap.min.js"></script>
     <style>
         body { font-family: 'Segoe UI', sans-serif; background-color: #2c3e50; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; }
         .login-card { background: white; padding: 2rem; border-radius: 10px; width: 350px; text-align: center; box-shadow: 0 10px 25px rgba(0,0,0,0.2); }
