@@ -3,8 +3,6 @@
 require_once "lib/dbconnect.php";
 session_start();
 
-//Ελέγχει αν υπάρχουν ονόματα στην μνήμη. Αν δεν υπάρχουν σημαίνει ότι μπήκε κάποιος απευθείας χωρίς να τα συμπληρώσει
-//και τον στέλνει πίσω στο login.php 
 if (!isset($_SESSION['player1_name']) || !isset($_SESSION['player2_name'])) {
     $_SESSION['error'] = "Πρέπει να κάνετε Login για να παίξετε!";
     header("Location: login.php");
@@ -25,12 +23,6 @@ if (!isset($_SESSION['player_white'])) {
         $_SESSION['player_white'] = $p2_name; 
         $_SESSION['my_color'] = 'black';
     }
-
-    //Μηδενίζει τα πάντα. 
-    // Το παιχνίδι δεν έχει αρχίσει ακόμα. Μηδενίζει τα σκορ. Σβήνει τα ζάρια.
-    
-    //$mysqli->query("UPDATE game_status SET status='not active', p_turn=NULL, result=NULL, score_w=0, score_b=0, dice1=NULL, dice2=NULL");
-
     $mysqli->query("call clean_board()");
 }
 ?>
@@ -39,13 +31,22 @@ if (!isset($_SESSION['player_white'])) {
 <head>
     <meta charset="UTF-8">
     <title>Το Φεύγα μου</title>
-    <link rel="stylesheet" href="style.css?v=4"> 
+    
     <script>
         var myColor = "<?php echo $_SESSION['my_color']; ?>";
         var isHotseat = <?php echo ($_SESSION['game_mode'] === 'hotseat') ? 'true' : 'false'; ?>;
         var pWhite = "<?php echo $_SESSION['player_white']; ?>";
         var pBlack = "<?php echo $_SESSION['player_black']; ?>";
     </script>
+
+    <link href="bootstrap/bootstrap.min.css" rel="stylesheet">
+    
+    <link href="css/style.css" rel="stylesheet"> 
+
+    <script src="bootstrap/jquery-3.2.1.min.js"></script>
+    <script src="bootstrap/bootstrap.min.js"></script>
+    
+    <script src="js/fevga.js"></script>
 </head>
 <body>
 
@@ -62,7 +63,7 @@ if (!isset($_SESSION['player_white'])) {
         </table>
     </div>
 
-    <a href="logout.php" class="btn-exit-top">Έξοδος</a>
+    <a href="logout.php" class="btn-exit-top btn btn-danger">Έξοδος</a>
 
     <div class="game-wrapper">
         
@@ -109,20 +110,19 @@ if (!isset($_SESSION['player_white'])) {
             </div>
 
             <div id="start-message" style="display:none; font-size: 1.5rem; font-weight:bold; color: #f1c40f; margin: 10px 0;">
-                </div>
+            </div>
 
-            <button id="btn-start-game" onclick="startGame()">Έναρξη Παιχνιδιού</button>
-            <button id="btn-roll-first" onclick="rollFirst()" style="display:none;">🎲 Ποιος παίζει πρώτος;</button>
-            <button id="btn-roll" onclick="rollDice()" style="display:none;">Ρίξε τα Ζάρια!</button>
+            <button id="btn-start-game" onclick="startGame()" class="btn btn-success btn-lg">Έναρξη Παιχνιδιού</button>
+            <button id="btn-roll-first" onclick="rollFirst()" class="btn btn-primary btn-lg" style="display:none;">🎲 Ποιος παίζει πρώτος;</button>
+            <button id="btn-roll" onclick="rollDice()" class="btn btn-warning btn-lg" style="display:none;">Ρίξε τα Ζάρια!</button>
 
             <div id="game-controls" style="display:none; margin-top:15px;">
-                <button onclick="resetGame()" class="btn-secondary">Reset</button> 
-                <button onclick="updateAll()" class="btn-secondary">Refresh</button>
+                <button onclick="resetGame()" class="btn btn-secondary">Reset</button> 
+                <button onclick="updateAll()" class="btn btn-info">Refresh</button>
             </div>
         </div>
 
     </div>
 
-    <script src="fevga.js?v=13"></script> 
 </body>
 </html>
