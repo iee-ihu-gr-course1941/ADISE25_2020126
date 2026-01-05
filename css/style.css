@@ -1,0 +1,288 @@
+/* style.css - Final Fixed Version */
+
+/* --- ΓΕΝΙΚΟ ΣΤΥΛ --- */
+body {
+    background-color: #2c3e50;
+    font-family: 'Segoe UI', sans-serif;
+    margin: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding-top: 20px;
+    color: white;
+}
+
+/* --- 1. SCOREBOARD (ΠΑΝΩ ΑΡΙΣΤΕΡΑ) --- */
+#scoreboard {
+    position: absolute;
+    top: 20px;
+    left: 20px;
+    background-color: rgba(0, 0, 0, 0.6);
+    padding: 10px;
+    border-radius: 8px;
+    color: white;
+    border: 1px solid #fff;
+    box-shadow: 2px 2px 10px rgba(0,0,0,0.5);
+    z-index: 100;
+}
+
+#scoreboard table { border-collapse: collapse; }
+#scoreboard th, #scoreboard td {
+    padding: 5px 10px;
+    text-align: center;
+    border: 1px solid rgba(255,255,255,0.3);
+}
+#scoreboard th { font-size: 0.9rem; color: #ff9800; }
+#scoreboard td { font-size: 1.5rem; font-weight: bold; }
+
+
+/* --- 2. ΚΟΥΜΠΙ ΕΞΟΔΟΥ (ΠΑΝΩ ΔΕΞΙΑ) --- */
+.btn-exit-top {
+    position: absolute;
+    top: 20px;
+    right: 20px;
+    background-color: #c0392b;
+    color: white;
+    text-decoration: none;
+    padding: 10px 20px;
+    border-radius: 5px;
+    font-weight: bold;
+    box-shadow: 0 4px 0 #922b21;
+    transition: 0.2s;
+    z-index: 100;
+}
+.btn-exit-top:hover { background-color: #e74c3c; }
+.btn-exit-top:active { transform: translateY(2px); box-shadow: none; }
+
+
+/* --- 3. GAME WRAPPER --- */
+.game-wrapper {
+    width: 600px; 
+    margin: 0 auto; 
+    display: flex;
+    flex-direction: column;
+    margin-top: 40px; /* Λίγο κενό από πάνω για να μην πέφτει πάνω στα κουμπιά */
+}
+
+
+/* --- 4. BOARD (ΤΟ ΞΥΛΙΝΟ ΠΛΑΙΣΙΟ) --- */
+.board {
+    width: 600px;
+    height: 400px;
+    background-color: #8B4513;
+    border: 15px solid #5D4037;
+    border-radius: 10px;
+    display: flex;
+    padding: 10px;
+    position: relative;
+    box-sizing: content-box; 
+    box-shadow: 0 10px 25px rgba(0,0,0,0.5);
+}
+
+.half-board {
+    flex: 1;
+    display: flex;
+    background-color: #DEB887;
+    position: relative;
+}
+
+.bar {
+    width: 40px;
+    background-color: #5D4037;
+    height: 100%;
+    box-shadow: inset 0 0 10px rgba(0,0,0,0.3);
+}
+
+.row {
+    position: absolute;
+    width: 100%;
+    height: 40%;
+    display: flex;
+}
+.top { top: 0; }
+.bottom { bottom: 0; }
+
+
+/* --- 5. POINTS (ΤΡΙΓΩΝΑ) --- */
+.point {
+    flex: 1;
+    height: 100%;
+    margin: 0 1px;
+    clip-path: polygon(50% 100%, 0 0, 100% 0); 
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+.bottom .point {
+    clip-path: polygon(50% 0, 0 100%, 100% 100%);
+    justify-content: flex-end; 
+}
+.top .point { justify-content: flex-start; }
+
+.point:nth-child(odd) { background-color: #555; }
+.point:nth-child(even) { background-color: #e74c3c; }
+.bottom .point:nth-child(odd) { background-color: #e74c3c; }
+.bottom .point:nth-child(even) { background-color: #555; }
+
+
+/* --- 6. PLAYER LABELS --- */
+.player-label {
+    padding: 5px 0;
+    font-size: 1.2rem;
+    font-weight: bold;
+    display: flex;
+    align-items: center;
+}
+.top-right {
+    justify-content: flex-end;
+    margin-bottom: 5px;
+    color: #ecf0f1; 
+    text-shadow: 1px 1px 2px black;
+}
+.bottom-left {
+    justify-content: flex-start;
+    margin-top: 5px;
+    color: #ecf0f1;
+    text-shadow: 1px 1px 2px black;
+}
+
+
+/* --- 7. ZARIA --- */
+#dice-display {
+    margin: 10px auto;
+    text-align: center;
+    height: 50px;
+}
+.dice-box {
+    display: inline-block;
+    width: 40px;
+    height: 40px;
+    background-color: white;
+    border: 2px solid #333;
+    border-radius: 8px;
+    margin: 0 5px;
+    font-size: 24px;
+    line-height: 38px;
+    font-weight: bold;
+    color: #333;
+    box-shadow: 3px 3px 5px rgba(0,0,0,0.3);
+}
+.dice-used {
+    background-color: #95a5a6;
+    color: #bdc3c7;
+    border-color: #7f8c8d;
+    box-shadow: inset 0 0 5px rgba(0,0,0,0.5);
+    transform: scale(0.9); 
+}
+
+
+/* --- 8. ΠΟΥΛΙΑ --- */
+.piece {
+    width: 30px; height: 30px;
+    border-radius: 50%;
+    border: 2px solid #000;
+    margin: 1px 0;
+    box-shadow: 2px 2px 5px rgba(0,0,0,0.5);
+    transition: all 0.2s;
+    flex-shrink: 0;           
+    z-index: 10;
+}
+.white-piece { background-color: #fff; }
+.black-piece { background-color: #222; }
+
+
+/* --- 9. ΚΟΥΜΠΙΑ --- */
+#controls { margin-top: 15px; text-align: center; }
+
+/* Reset / Refresh (Όπως παλιά: Γκρι, διακριτικά) */
+.btn-secondary {
+    padding: 8px 15px;
+    font-size: 0.9rem;
+    background-color: #7f8c8d;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    margin: 0 5px;
+}
+.btn-secondary:hover { background-color: #95a5a6; }
+
+/* Main Game Buttons */
+#btn-roll {
+    padding: 10px 20px;
+    font-size: 1.1rem;
+    border-radius: 5px;
+    background-color: #e67e22; 
+    color: white; 
+    font-weight: bold;
+    border: none;
+    cursor: pointer;
+    box-shadow: 0 4px 0 #d35400;
+}
+#btn-roll:hover { background-color: #d35400; }
+
+#btn-start-game {
+    padding: 15px 30px;
+    font-size: 1.2rem;
+    font-weight: bold;
+    background-color: #27ae60;
+    color: white;
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+    box-shadow: 0 4px 0 #219150;
+    animation: pulse 2s infinite;
+}
+#btn-start-game:hover { background-color: #2ecc71; }
+
+#btn-roll-first {
+    padding: 12px 25px;
+    font-size: 1.1rem;
+    font-weight: bold;
+    background-color: #9b59b6;
+    color: white;
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+    box-shadow: 0 4px 0 #8e44ad;
+}
+
+@keyframes pulse {
+    0% { transform: scale(1); }
+    50% { transform: scale(1.05); }
+    100% { transform: scale(1); }
+}
+
+
+/* --- 10. HIGHLIGHTS --- */
+.selected-piece { z-index: 1000 !important; transform: scale(1.2); }
+.white-piece.selected-piece {
+    border: 3px solid #ff9800 !important;
+    box-shadow: inset 0 0 0 20px #ffd700, 0 0 15px #ff9800 !important;
+    background-color: transparent !important;
+}
+.black-piece.selected-piece {
+    border: 3px solid #ff9800 !important;
+    box-shadow: 0 0 15px #ffd700, 0 0 5px #ff9800 !important;
+}
+.possible-move {
+    background-color: rgba(46, 204, 113, 0.6) !important;
+    border: 2px dashed #2ecc71;
+    cursor: pointer;
+    box-shadow: inset 0 0 10px #2ecc71;
+    animation: pulse-green 1.5s infinite;
+}
+@keyframes pulse-green {
+    0% { background-color: rgba(46, 204, 113, 0.4); }
+    50% { background-color: rgba(46, 204, 113, 0.7); }
+    100% { background-color: rgba(46, 204, 113, 0.4); }
+}
+
+.turn-active {
+    margin-left: 10px;
+    padding: 3px 10px;
+    background: #27ae60;
+    border-radius: 15px;
+    font-size: 0.8rem;
+    box-shadow: 0 0 5px #2ecc71;
+}
