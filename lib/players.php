@@ -43,27 +43,27 @@ function handle_user($method, $b, $input) {
 function show_user($b) {
     global $mysqli;
     // ΤΩΡΑ ΔΙΑΒΑΖΟΥΜΕ ΚΑΝΟΝΙΚΑ ΑΠΟ ΤΗ ΒΑΣΗ
-    $sql = 'SELECT username, piece_color FROM players WHERE piece_color=?';
+    $sql = 'SELECT username, piece_color, token, last_action FROM players WHERE piece_color=?';
     $st = $mysqli->prepare($sql);
     $st->bind_param('s', $b);
     $st->execute();
     $res = $st->get_result();
     
     header('Content-type: application/json');
-    print json_encode($res->fetch_all(MYSQLI_ASSOC), JSON_PRETTY_PRINT);
+    print json_encode($res->fetch_all(MYSQLI_ASSOC), JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE);
 }
 
 function show_users() {
     global $mysqli;
     // Ζητάμε από τη βάση ΟΛΟΥΣ τους παίκτες
-    $sql = 'SELECT username, piece_color FROM players';
+    $sql = 'SELECT username, piece_color, token, last_action FROM players';
     $st = $mysqli->prepare($sql);
     $st->execute();
     $res = $st->get_result();
     
     header('Content-type: application/json');
     // Τυπώνουμε τα αποτελέσματα σε JSON
-    print json_encode($res->fetch_all(MYSQLI_ASSOC), JSON_PRETTY_PRINT);
+    print json_encode($res->fetch_all(MYSQLI_ASSOC), JSON_PRETTY_PRINT| JSON_UNESCAPED_UNICODE);
 }
 
 
@@ -82,7 +82,7 @@ function set_user($b, $input) {
     $sql = 'SELECT count(*) as c FROM players 
             WHERE piece_color=? 
             AND username IS NOT NULL
-            AND last_action > (NOW() - INTERVAL 30 SECOND)'; 
+            AND last_action > (NOW() - INTERVAL 5 MINUTE)'; 
             
     $st = $mysqli->prepare($sql);
     $st->bind_param('s', $b);
@@ -99,7 +99,12 @@ function set_user($b, $input) {
     // 2. Αν περάσαμε τον έλεγχο (η θέση είναι κενή Η' ο προηγούμενος ήταν ανενεργός),
     // τότε παίρνουμε εμείς τη θέση.
     // ΠΡΟΣΟΧΗ: Ενημερώνουμε και το last_action=NOW()
-    $sql = 'UPDATE players SET username=?, token=md5(CONCAT(?, NOW())), last_action=NOW() WHERE piece_color=?';
+    $sql = 'UPDATE players 
+            SET username=?, 
+            token=md5(CONCAT( ?, NOW())), 
+            last_action=NOW() 
+            WHERE piece_color=?';
+
     $st2 = $mysqli->prepare($sql);
     $st2->bind_param('sss', $username, $username, $b);
     $st2->execute();
@@ -116,6 +121,23 @@ function set_user($b, $input) {
     
     header('Content-type: application/json');
     print json_encode($res->fetch_all(MYSQLI_ASSOC), JSON_PRETTY_PRINT);
+}
+
+
+function current_color($token) {
+    global $mysqli;
+    if($token == null) { return null; }
+    
+    $sql = 'SELECT * FROM players WHERE token = ?';
+    $st = $mysqli->prepare($sql);
+    $st->bind_param('s', $token);
+    $st->execute();
+    $res = $st->get_result();
+    
+    if($row = $res->fetch_assoc()) {
+        return $row['piece_color'];
+    }
+    return null;
 }
 
 ?>

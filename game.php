@@ -9,22 +9,59 @@ if (!isset($_SESSION['player1_name']) || !isset($_SESSION['player2_name'])) {
     exit();
 }
 
-if (!isset($_SESSION['player_white'])) {
-    $p1_name = $_SESSION['player1_name'];
-    $p2_name = $_SESSION['player2_name'];
-    $choice  = isset($_SESSION['player1_color']) ? $_SESSION['player1_color'] : 'white';
+// --- LOGIC FIX: Υπολογισμός ονομάτων για JavaScript και Session ---
+$name_white = "";
+$name_black = "";
 
-    if ($choice === 'white') {
-        $_SESSION['player_white'] = $p1_name; 
-        $_SESSION['player_black'] = $p2_name; 
-        $_SESSION['my_color'] = 'white'; 
+if (isset($_SESSION['player1_color']) && $_SESSION['player1_color'] == 'white') {
+    $name_white = $_SESSION['player1_name'];
+    $name_black = $_SESSION['player2_name'];
+} else {
+    $name_white = $_SESSION['player2_name'];
+    $name_black = $_SESSION['player1_name'];
+}
+
+// Αρχικοποίηση Session (αν δεν έχει γίνει ήδη)
+if (!isset($_SESSION['player_white'])) {
+    $_SESSION['player_white'] = $name_white; 
+    $_SESSION['player_black'] = $name_black; 
+    
+    // Ποιο χρώμα είμαι εγώ;
+    if($_SESSION['player1_name'] == $name_white) {
+        $_SESSION['my_color'] = 'white';
     } else {
-        $_SESSION['player_black'] = $p1_name; 
-        $_SESSION['player_white'] = $p2_name; 
         $_SESSION['my_color'] = 'black';
     }
-    $mysqli->query("call clean_board()");
+    
+    $is_hotseat = (isset($_SESSION['game_mode']) && $_SESSION['game_mode'] === 'hotseat');
+    
+    // ==================================================================
+    // ΝΕΟΣ ΚΩΔΙΚΑΣ: ΚΑΘΑΡΙΣΜΟΣ ZOMBIE GAMES
+    // ==================================================================
+    
+    // 1. Τραβάμε status ΚΑΙ χρόνο τελευταίας αλλαγής
+    $status_data = $mysqli->query("SELECT status, last_change FROM game_status")->fetch_assoc();
+    $status_check = $status_data['status'];
+    
+    // 2. Υπολογίζουμε πόση ώρα έχει περάσει (σε δευτερόλεπτα)
+    $last_active_time = strtotime($status_data['last_change']);
+    $time_diff = time() - $last_active_time; // Τωρινή ώρα μείον ώρα βάσης
+
+    // 3. Μετράμε παίκτες
+    $players_count = $mysqli->query("SELECT count(*) as c FROM players WHERE username IS NOT NULL")->fetch_assoc()['c'];
+
+    // Η ΣΥΝΘΗΚΗ: Καθαρίζουμε αν είναι Hotseat, ή Aborted, ή κενό, 
+    // Ή αν είναι 'started' ΑΛΛΑ έχουν περάσει πάνω από 15 λεπτά (900 δευτ.) αδράνειας
+    if ($is_hotseat || $status_check === 'aborted' || $players_count == 0 || ($status_check === 'started' && $time_diff > 900)) {
+        
+        $mysqli->query("call clean_board()");
+        $mysqli->query("UPDATE game_status SET status='not active', result=NULL, p_turn=NULL");
+    }
+    // ==================================================================
 }
+
+// Υπολογισμός μεταβλητής για JS
+$is_hotseat_js = (isset($_SESSION['game_mode']) && $_SESSION['game_mode'] === 'hotseat') ? 'true' : 'false';
 ?>
 <!DOCTYPE html>
 <html lang="el">
@@ -32,29 +69,28 @@ if (!isset($_SESSION['player_white'])) {
     <meta charset="UTF-8">
     <title>Το Φεύγα μου</title>
     
-    <script>
-        var myColor = "<?php echo $_SESSION['my_color']; ?>";
-        var isHotseat = <?php echo ($_SESSION['game_mode'] === 'hotseat') ? 'true' : 'false'; ?>;
-        var pWhite = "<?php echo $_SESSION['player_white']; ?>";
-        var pBlack = "<?php echo $_SESSION['player_black']; ?>";
-    </script>
-
     <link href="bootstrap/bootstrap.min.css" rel="stylesheet">
-    
     <link href="css/style.css" rel="stylesheet"> 
 
     <script src="bootstrap/jquery-3.2.1.min.js"></script>
     <script src="bootstrap/bootstrap.min.js"></script>
     
-    <script src="js/fevga.js"></script>
-</head>
+    </head>
 <body>
+    
+    <div id="waiting-overlay" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(44, 62, 80, 0.95); z-index:9999; flex-direction:column; justify-content:center; align-items:center; color:white; text-align:center;">
+        <h1 style="font-size: 3rem; margin-bottom: 20px;">⏳ Αναμονή Αντιπάλου...</h1>
+        <p style="font-size: 1.5rem;">Περιμένετε τον 2ο παίκτη να συνδεθεί για να ξεκινήσετε.</p>
+        <div class="spinner-border text-light" role="status" style="width: 3rem; height: 3rem; margin-top: 20px;">
+            <span class="sr-only">Loading...</span>
+        </div>
+    </div>
 
     <div id="scoreboard">
         <table>
             <tr>
-                <th><?php echo $_SESSION['player_white']; ?> (W)</th>
-                <th><?php echo $_SESSION['player_black']; ?> (B)</th>
+                <th><span id="score-name-w"><?php echo $_SESSION['player_white']; ?></span> (W)</th>
+                <th><span id="score-name-b"><?php echo $_SESSION['player_black']; ?></span> (B)</th>
             </tr>
             <tr>
                 <td id="score-w">0</td>
@@ -63,13 +99,13 @@ if (!isset($_SESSION['player_white'])) {
         </table>
     </div>
 
-    <a href="logout.php" class="btn-exit-top btn btn-danger">Έξοδος</a>
+    <a href="#" onclick="confirmExit()" class="btn-exit-top btn btn-danger">Έξοδος</a>
 
     <div class="game-wrapper">
         
         <div class="player-label top-right">
             <span id="turn-label-b" class="turn-active" style="display:none; margin-right:10px;">Παίζει τώρα</span>
-            <?php echo $_SESSION['player_black']; ?> (Μαύρα)
+            <span id="p-name-b"><?php echo $_SESSION['player_black']; ?></span> (Μαύρα)
         </div>
 
         <div class="board">
@@ -99,7 +135,7 @@ if (!isset($_SESSION['player_white'])) {
         </div>
 
         <div class="player-label bottom-left">
-            <?php echo $_SESSION['player_white']; ?> (Άσπρα)
+            <span id="p-name-w"><?php echo $_SESSION['player_white']; ?></span> (Άσπρα)
             <span id="turn-label-w" class="turn-active" style="display:none;">Παίζει τώρα</span>
         </div>
 
@@ -123,6 +159,23 @@ if (!isset($_SESSION['player_white'])) {
         </div>
 
     </div>
+
+    <script>
+        var myColor = "<?php echo $_SESSION['my_color']; ?>";
+        var isHotseat = <?php echo $is_hotseat_js; ?>;
+        var pWhite = "<?php echo $name_white; ?>";
+        var pBlack = "<?php echo $name_black; ?>";
+    </script>
+
+    <script>
+        function confirmExit() {
+            if (confirm("Θέλετε σίγουρα να αποχωρήσετε από το παιχνίδι;")) {
+                window.location.href = "logout.php";
+            }
+        }
+    </script>
+    
+    <script src="js/fevga.js?v=4"></script> 
 
 </body>
 </html>

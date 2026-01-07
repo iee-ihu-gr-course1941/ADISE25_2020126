@@ -19,10 +19,68 @@ async function startGame() {
     }
 }
 
+async function syncPlayers() {
+    try {
+        const resW = await fetch('tavli.php/player/W');
+        const dataW = await resW.json();
+        
+        const resB = await fetch('tavli.php/player/B');
+        const dataB = await resB.json();
+
+        // --- 1. Ενημέρωση Ονομάτων (ΜΟΝΟ αν υπάρχουν τα IDs) ---
+        
+        // ΛΕΥΚΟΣ
+        if (dataW.length > 0 && dataW[0].username) {
+            const name = dataW[0].username;
+            
+            // Ενημέρωση Label (Κάτω Αριστερά) - Ψάχνουμε το ID, όχι την κλάση!
+            const elW = document.getElementById('p-name-w');
+            if(elW) elW.innerText = name; // Αντικαθιστά μόνο το κείμενο μέσα στο span
+            
+            // Ενημέρωση Scoreboard
+            const scW = document.getElementById('score-name-w');
+            if(scW) scW.innerText = name;
+        }
+
+        // ΜΑΥΡΟΣ
+        if (dataB.length > 0 && dataB[0].username) {
+            const name = dataB[0].username;
+            
+            // Ενημέρωση Label (Πάνω Δεξιά)
+            const elB = document.getElementById('p-name-b');
+            if(elB) elB.innerText = name;
+            
+            // Ενημέρωση Scoreboard
+            const scB = document.getElementById('score-name-b');
+            if(scB) scB.innerText = name;
+        }
+
+
+        // --- 2. Λογική Αναμονής (Waiting Overlay) ---
+        const overlay = document.getElementById('waiting-overlay');
+        
+        if (typeof isHotseat !== 'undefined' && isHotseat === false) {
+            const player1Ready = (dataW.length > 0 && dataW[0].username);
+            const player2Ready = (dataB.length > 0 && dataB[0].username);
+
+            if (player1Ready && player2Ready) {
+                if(overlay) overlay.style.display = 'none';
+            } else {
+                if(overlay) overlay.style.display = 'flex';
+            }
+        } else {
+            if(overlay) overlay.style.display = 'none';
+        }
+
+    } catch (e) {
+        console.error("Σφάλμα συγχρονισμού παικτών:", e);
+    }
+}
 
 async function updateAll() {
-    if (isAnimating) return; 
-    await checkGameStatus();
+    if (isAnimating) return;
+    await checkGameStatus(); 
+    await syncPlayers();
     await refreshBoard();
 }
 
@@ -148,6 +206,11 @@ async function checkGameStatus() {
                  btnRollFirst.innerText = "Ισοπαλία! Ξανά για " + pWhite;
             }
         } 
+        else if (status.status === 'aborted') {
+            alert("Ο αντίπαλος αποχώρησε (ή έληξε ο χρόνος). Κερδίσατε!");
+            window.location.href = 'index.php'; 
+            return;
+        }
         else {
             // STARTED
             if(btnStart) btnStart.style.display = 'none';
@@ -358,7 +421,43 @@ async function surrender(color) {
     } 
 }
 
-document.addEventListener('DOMContentLoaded', () => { 
+
+async function loginPlayer(name, colorCode) {
+    if (!name || name === "Waiting...") return; 
+
+    try {
+        console.log("Προσπάθεια Login στη βάση για: " + name + " (" + colorCode + ")");
+        
+        // Καλεί το set_user (PUT tavli.php/players/W ή B)
+        await fetch('tavli.php/player/' + colorCode, {
+            method: 'PUT',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ username: name })
+        });
+        
+        console.log("Επιτυχία! Ο παίκτης " + name + " γράφτηκε στη βάση.");
+    } catch (e) {
+        console.error("Σφάλμα κατά το Login του " + colorCode, e);
+    }
+}
+
+
+document.addEventListener('DOMContentLoaded', async () => { 
+    // 1. Χρησιμοποιούμε τις μεταβλητές pWhite και pBlack που έχεις ήδη στο game.php!
+    
+    // Αν υπάρχει όνομα για τον Λευκό, κάντον Login
+    if (typeof pWhite !== 'undefined' && pWhite) {
+        await loginPlayer(pWhite, 'W');
+    }
+
+    // Αν υπάρχει όνομα για τον Μαύρο, κάντον Login
+    if (typeof pBlack !== 'undefined' && pBlack) {
+        await loginPlayer(pBlack, 'B');
+    }
+
+    // 2. Αφού τελειώσει το Login, ξεκινάμε την ενημέρωση του παιχνιδιού
     updateAll(); 
     setInterval(updateAll, 3000); 
 });

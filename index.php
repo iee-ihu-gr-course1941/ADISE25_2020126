@@ -62,7 +62,11 @@
         .btn-local { background-color: #27ae60; }
         .btn-local:hover { background-color: #2ecc71; transform: translateY(-5px); }
 
-        .btn-online { background-color: #34495e; cursor: not-allowed; opacity: 0.6; }
+        .btn-online { background-color: #34495e; }
+        
+        .btn-online:hover { background-color: #2c3e50; 
+            transform: translateY(-5px); 
+        }
     </style>
 </head>
 <body>
@@ -75,7 +79,7 @@
             <small>2 Παίκτες στην ίδια οθόνη</small>
         </a>
 
-        <a href="#" class="btn-mode btn-online text-decoration-none" onclick="alert('Η Online λειτουργία θα ενεργοποιηθεί σύντομα!'); return false;">
+        <a href="login.php?mode=online" class="btn-mode btn-online text-decoration-none">
             <span>🌐 Online</span>
             <small>Multiplayer μέσω δικτύου</small>
         </a>

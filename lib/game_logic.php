@@ -34,7 +34,7 @@ function show_status() {
     global $mysqli;
     $res = $mysqli->query("SELECT * FROM game_status LIMIT 1");
     if($res) {
-        echo json_encode($res->fetch_assoc());
+        echo json_encode($res->fetch_assoc(), JSON_PRETTY_PRINT);
     } else {
         echo json_encode(['status' => 'error', 'msg' => 'Database error']);
     }
@@ -53,18 +53,33 @@ function update_game_status() {
     // 1. Διαβάζουμε την τρέχουσα κατάσταση
     $status = $mysqli->query("SELECT status FROM game_status")->fetch_assoc()['status'];
     
-    // 2. Αν το παιχνίδι είναι 'started', ελέγχουμε για Timeout (Αυτό που είχαμε)
+    // 2. Αν το παιχνίδι είναι 'started', ελέγχουμε για Timeout
     if($status == 'started') {
-        $sql = "SELECT count(*) as c FROM players WHERE last_action < (NOW() - INTERVAL 30 SECOND) AND username IS NOT NULL";
+        // ΔΙΟΡΘΩΣΗ: Ζητάμε SELECT * (όλα τα πεδία) και όχι count, 
+        // για να μπορούμε να διαβάσουμε το piece_color του παίκτη που κοιμήθηκε.
+        $sql = "SELECT * FROM players WHERE last_action < (NOW() - INTERVAL 5 MINUTE) AND username IS NOT NULL";
         $st = $mysqli->prepare($sql);
         $st->execute();
-        $res = $st->get_result()->fetch_assoc();
+        $res = $st->get_result();
 
-        if($res['c'] > 0) {
-            $mysqli->query("UPDATE game_status SET status='aborted', result='timeout'");
+        // Αν βρέθηκε παίκτης (δηλαδή η fetch_assoc επιστρέψει δεδομένα)
+        if ($row = $res->fetch_assoc()) {
+            // Βρήκαμε παίκτη που "κοιμήθηκε"!
+            $sleeping_color = $row['piece_color']; // 'W' ή 'B'
+            
+            // Ο νικητής είναι ο αντίπαλος
+            $winner = ($sleeping_color == 'W') ? 'B' : 'W';
+
+            // α. Ενημερώνουμε το status σε aborted και ορίζουμε τον νικητή
+            $mysqli->query("UPDATE game_status SET status='aborted', result='$winner', p_turn=NULL");
+
+            // β. Διαγράφουμε ΜΟΝΟ τον παίκτη που άργησε
+            $mysqli->query("UPDATE players SET username=NULL, token=NULL WHERE piece_color='$sleeping_color'");
         }
+        
+        // ΣΗΜΕΙΩΣΗ: Αφαίρεσα το if($res['c'] > 0)... ήταν λάθος και περιττό.
     }
-    // 3. Αν το παιχνίδι ΔΕΝ είναι started, ελέγχουμε μήπως πρέπει να ξεκινήσει! (ΤΟ ΝΕΟ ΚΟΜΜΑΤΙ)
+    // 3. Αν το παιχνίδι ΔΕΝ είναι started, ελέγχουμε μήπως πρέπει να ξεκινήσει!
     else {
         // Μετράμε πόσοι παίκτες έχουν username (έχουν κάνει login)
         $sql = "SELECT count(*) as c FROM players WHERE username IS NOT NULL";

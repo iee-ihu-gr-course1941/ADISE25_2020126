@@ -20,11 +20,20 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
     $p1_color = isset($_POST['p1_color']) ? $_POST['p1_color'] : 'white';
     $p2_color = ($p1_color === 'white') ? 'black' : 'white';
 
-    if (empty($p1) || empty($p2)) {
-        $_SESSION['error'] = "Παρακαλώ συμπληρώστε έγκυρα ονόματα!";
+    if (empty($p1)) {
+        $_SESSION['error'] = "Παρακαλώ συμπληρώστε το όνομά σας!";
         header("Location: login.php"); 
         exit();
     }
+
+    // Έλεγχος: Ο Παίκτης 2 είναι υποχρεωτικός ΜΟΝΟ στο Hotseat
+    // Στο Online επιτρέπεται να είναι κενός (αφού θα μπει άλλος)
+    if ($is_hotseat && empty($p2)) {
+        $_SESSION['error'] = "Παρακαλώ συμπληρώστε και το όνομα του 2ου παίκτη!";
+        header("Location: login.php"); 
+        exit();
+    }
+
     if ($p1 === $p2) {
         $_SESSION['error'] = "Οι παίκτες δεν μπορούν να έχουν το ίδιο όνομα!";
         header("Location: login.php");
