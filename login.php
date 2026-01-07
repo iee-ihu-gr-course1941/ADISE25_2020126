@@ -1,10 +1,33 @@
 <?php
 // login.php
+require_once "lib/dbconnect.php"; // Χρειαζόμαστε τη βάση για τον έλεγχο
 session_start();
 
-// --- ΚΑΘΑΡΙΣΜΟΣ SESSION --- Όταν κάποιος μπαίνει στην σελίδα χωρίς να έχει πατήσει το κουμπί.
-// Κρατάει προσωρινά backup error και mode. Κάνουμε νέο session με ναέα δεδομένα και βάζουμε στο νέο session τα προηγούμενα 
-// error και mode.
+// --- ΕΛΕΓΧΟΣ ΚΑΤΑΣΤΑΣΗΣ ΠΑΙΧΝΙΔΙΟΥ (ONLINE MODE) ---
+$game_full = false;
+$taken_color = null;
+
+if (isset($_GET['mode']) && $_GET['mode'] == 'online') {
+    // 1. Έλεγχος: Είναι γεμάτο το παιχνίδι; (2 ενεργοί παίκτες)
+    $sql = "SELECT count(*) as c FROM players WHERE username IS NOT NULL AND last_action > (NOW() - INTERVAL 5 MINUTE)";
+    $res = $mysqli->query($sql);
+    $active_players = $res->fetch_assoc()['c'];
+
+    if ($active_players >= 2) {
+        $game_full = true;
+    }
+
+    // 2. Έλεγχος: Ποιο χρώμα είναι πιασμένο;
+    if (!$game_full) {
+        $sql = "SELECT piece_color FROM players WHERE username IS NOT NULL AND last_action > (NOW() - INTERVAL 5 MINUTE)";
+        $res = $mysqli->query($sql);
+        if ($row = $res->fetch_assoc()) {
+            $taken_color = $row['piece_color']; // 'W' ή 'B'
+        }
+    }
+}
+
+// --- ΚΑΘΑΡΙΣΜΟΣ SESSION ---
 if ($_SERVER["REQUEST_METHOD"] == "GET") {
     $temp_error = isset($_SESSION['error']) ? $_SESSION['error'] : '';
     $temp_mode = isset($_SESSION['game_mode']) ? $_SESSION['game_mode'] : '';
@@ -13,34 +36,31 @@ if ($_SERVER["REQUEST_METHOD"] == "GET") {
     if($temp_error) $_SESSION['error'] = $temp_error;
 }
 
+// --- LOGIC ΓΙΑ ΤΟ POST (LOGIN) ---
 if ($_SERVER["REQUEST_METHOD"] == "POST") {
-    //Ternary operatior -> Σε μία γραμμή
     $p1 = isset($_POST['player1']) ? trim($_POST['player1']) : '';
     $p2 = isset($_POST['player2']) ? trim($_POST['player2']) : '';
     $p1_color = isset($_POST['p1_color']) ? $_POST['p1_color'] : 'white';
-    $p2_color = ($p1_color === 'white') ? 'black' : 'white';
+
+    // Backend Έλεγχος για το χρώμα
+    if ($_SESSION['game_mode'] == 'online') {
+        // Ξανακάνουμε τον έλεγχο μήπως μας πρόλαβε άλλος στο κλάσμα του δευτερολέπτου
+        // (Θα το καλύψει και το players.php, αλλά καλό είναι να υπάρχει κι εδώ)
+    }
 
     if (empty($p1)) {
         $_SESSION['error'] = "Παρακαλώ συμπληρώστε το όνομά σας!";
         header("Location: login.php"); 
         exit();
     }
-
-    // Έλεγχος: Ο Παίκτης 2 είναι υποχρεωτικός ΜΟΝΟ στο Hotseat
-    // Στο Online επιτρέπεται να είναι κενός (αφού θα μπει άλλος)
+    
+    $is_hotseat = ($_SESSION['game_mode'] === 'hotseat');
     if ($is_hotseat && empty($p2)) {
         $_SESSION['error'] = "Παρακαλώ συμπληρώστε και το όνομα του 2ου παίκτη!";
         header("Location: login.php"); 
         exit();
     }
 
-    if ($p1 === $p2) {
-        $_SESSION['error'] = "Οι παίκτες δεν μπορούν να έχουν το ίδιο όνομα!";
-        header("Location: login.php");
-        exit();
-    }
-
-    //Αν δεν βρει λάθος...
     $_SESSION['player1_name'] = $p1;
     $_SESSION['player2_name'] = $p2;
     $_SESSION['player1_color'] = $p1_color;
@@ -50,18 +70,10 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
 }
 
 // Λήψη Mode
-if (isset($_GET['mode'])) { 
-    $_SESSION['game_mode'] = $_GET['mode']; 
-}
-
-//Αν κάποιος προσπαθήσει να μπει χωρίς να έχει επιλέξει mode, επιστρέφει στην αρχική σελίδα.
-if (!isset($_SESSION['game_mode'])) { 
-    header("Location: index.php"); 
-    exit(); 
-}
+if (isset($_GET['mode'])) { $_SESSION['game_mode'] = $_GET['mode']; }
+if (!isset($_SESSION['game_mode'])) { header("Location: index.php"); exit(); }
 
 $is_hotseat = ($_SESSION['game_mode'] === 'hotseat');
-
 $error = isset($_SESSION['error']) ? $_SESSION['error'] : "";
 unset($_SESSION['error']);
 ?>
@@ -72,72 +84,84 @@ unset($_SESSION['error']);
     <title>Ρυθμίσεις Παιχνιδιού</title>
     <link href="bootstrap/bootstrap.min.css" rel="stylesheet">
     <link href="css/style.css" rel="stylesheet">
-    <script src="bootstrap/jquery-3.2.1.min.js"></script>
-    <script src="bootstrap/bootstrap.min.js"></script>
     <style>
         body { font-family: 'Segoe UI', sans-serif; background-color: #2c3e50; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; }
         .login-card { background: white; padding: 2rem; border-radius: 10px; width: 350px; text-align: center; box-shadow: 0 10px 25px rgba(0,0,0,0.2); }
         input[type="text"], select { width: 100%; padding: 10px; margin-bottom: 15px; border-radius: 5px; border: 1px solid #ddd; box-sizing: border-box; font-size: 1rem;}
         .btn-login { width: 100%; padding: 12px; background-color: #f39c12; color: white; border: none; border-radius: 5px; cursor: pointer; font-weight: bold; font-size: 1.1rem; transition: 0.3s;}
         .btn-login:hover { background-color: #e67e22; }
+        .btn-disabled { background-color: #95a5a6; cursor: not-allowed; }
         .error-msg { color: #e74c3c; font-weight: bold; margin-bottom: 15px; }
+        .full-msg { color: #e74c3c; font-size: 1.2rem; font-weight: bold; margin: 20px 0; }
         label { display: block; text-align: left; font-weight: bold; margin-bottom: 5px; color: #2c3e50; }
-        h2 { color: #34495e; margin-bottom: 5px; }
-        hr { border: 0; border-top: 1px solid #eee; margin: 20px 0; }
     </style>
 </head>
 <body>
 
 <div class="login-card">
     <h2>Ρυθμίσεις Παιχνιδιού</h2>
-    <p style="color:#7f8c8d; font-size:0.9rem; margin-top: 0;">Λειτουργία: <?php echo $is_hotseat ? 'Ένας Υπολογιστής (Hotseat)' : 'Online Multiplayer'; ?></p>
+    <p style="color:#7f8c8d; font-size:0.9rem; margin-top: 0;">Λειτουργία: <?php echo $is_hotseat ? 'Hotseat' : 'Online Multiplayer'; ?></p>
 
     <?php if($error): ?><div class="error-msg"><?php echo $error; ?></div><?php endif; ?>
 
-    <form action="login.php" method="POST"> 
-        <label for="player1">Όνομα Παίκτη 1:</label>
-        <input type="text" id="player1" name="player1" placeholder="Όνομα..." value="<?php echo isset($_SESSION['player1_name']) ? htmlspecialchars($_SESSION['player1_name']) : ''; ?>" required>
+    <?php if (!$is_hotseat && $game_full): ?>
         
-        <label for="p1_color">Ο Παίκτης 1 παίζει με:</label>
-        <select id="p1_color" name="p1_color">
-            <option value="white" selected>Άσπρα</option>
-            <option value="black">Μαύρα</option>
-        </select>
+        <div class="full-msg">⚠️ Το παιχνίδι είναι πλήρες!</div>
+        <p>Υπάρχουν ήδη 2 παίκτες συνδεδεμένοι.</p>
+        <a href="index.php" class="btn-login" style="display:block; text-decoration:none; background:#34495e;">Επιστροφή</a>
 
-        <hr> 
+    <?php else: ?>
+        <form action="login.php" method="POST"> 
+            <label for="player1">Όνομα Παίκτη 1:</label>
+            <input type="text" id="player1" name="player1" placeholder="Όνομα..." required>
+            
+            <label for="p1_color">Ο Παίκτης 1 παίζει με:</label>
+            <select id="p1_color" name="p1_color">
+                <?php if ($taken_color == 'W'): ?>
+                    <option value="white" disabled>Άσπρα (Πιασμένο)</option>
+                    <option value="black" selected>Μαύρα</option>
+                <?php elseif ($taken_color == 'B'): ?>
+                    <option value="white" selected>Άσπρα</option>
+                    <option value="black" disabled>Μαύρα (Πιασμένο)</option>
+                <?php else: ?>
+                    <option value="white" selected>Άσπρα</option>
+                    <option value="black">Μαύρα</option>
+                <?php endif; ?>
+            </select>
 
-        <label for="player2">Όνομα Παίκτη 2:</label>
-        <input type="text" id="player2" name="player2" placeholder="<?php echo $is_hotseat ? 'Όνομα...' : 'Αναμονή...'; ?>" value="<?php echo isset($_SESSION['player2_name']) ? htmlspecialchars($_SESSION['player2_name']) : ''; ?>" <?php echo $is_hotseat ? 'required' : 'disabled'; ?>>
+            <hr> 
 
-        <label for="p2_color_display">Ο Παίκτης 2 παίζει με:</label>
-        <select id="p2_color_display">
-            <option value="black" selected>Μαύρα</option>
-            <option value="white">Άσπρα</option>
-        </select>
+            <label for="player2">Όνομα Παίκτη 2:</label>
+            <input type="text" id="player2" name="player2" placeholder="<?php echo $is_hotseat ? 'Όνομα...' : 'Αναμονή...'; ?>" <?php echo $is_hotseat ? 'required' : 'disabled'; ?>>
 
-        <button type="submit" class="btn-login" style="margin-top: 20px;">Έναρξη Παιχνιδιού</button>
-    </form>
+            <?php if ($is_hotseat): ?>
+            <label for="p2_color_display">Ο Παίκτης 2 παίζει με:</label>
+            <select id="p2_color_display">
+                <option value="black" selected>Μαύρα</option>
+                <option value="white">Άσπρα</option>
+            </select>
+            <?php endif; ?>
+
+            <button type="submit" class="btn-login" style="margin-top: 20px;">Έναρξη Παιχνιδιού</button>
+        </form>
+    <?php endif; ?>
+    
     <br>
-    <a href="index.php" style="color:#bdc3c7; text-decoration:none;">← Επιστροφή στην επιλογή</a>
+    <?php if (!(!$is_hotseat && $game_full)): ?>
+        <a href="index.php" style="color:#bdc3c7; text-decoration:none;">← Επιστροφή στην επιλογή</a>
+    <?php endif; ?>
 </div>
 
+<?php if ($is_hotseat): ?>
 <script>
     const p1Select = document.getElementById('p1_color');
     const p2Select = document.getElementById('p2_color_display');
-
-    function syncColors(changedElement) {
-        if (changedElement === p1Select) {
-            p2Select.value = (p1Select.value === 'white') ? 'black' : 'white';
-        } else {
-            p1Select.value = (p2Select.value === 'white') ? 'black' : 'white';
-        }
+    function syncColors() {
+        p2Select.value = (p1Select.value === 'white') ? 'black' : 'white';
     }
-
-    p1Select.addEventListener('change', function() { syncColors(this); });
-    p2Select.addEventListener('change', function() { syncColors(this); });
-
-    syncColors(p1Select);
+    p1Select.addEventListener('change', syncColors);
 </script>
+<?php endif; ?>
 
 </body>
 </html>
