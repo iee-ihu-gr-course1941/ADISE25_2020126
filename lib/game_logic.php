@@ -87,7 +87,7 @@ function update_game_status() {
         
         // Αν έχουμε 2 παίκτες, το παιχνίδι αρχίζει!
         if($result['c'] == 2) {
-            $mysqli->query("UPDATE game_status SET status='started'");
+            $mysqli->query("UPDATE game_status SET status='started', p_turn='W'");
         }
     }
 }
