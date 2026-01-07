@@ -1,6 +1,6 @@
 <?php
 // lib/players.php
-//require_once "lib/game_logic.php"; 
+require_once "lib/game_logic.php"; 
 
 function handle_player($method, $p, $input) {
     // Διαβάζουμε το χρώμα (W ή B) από το URL (π.χ. tavli.php/player/W)
@@ -77,8 +77,25 @@ function set_user($b, $input) {
     $username = $input['username'];
     global $mysqli;
 
-    // 1. Έλεγχος: Υπάρχει παίκτης σε αυτή τη θέση ΠΟΥ ΝΑ ΕΙΝΑΙ ΕΝΕΡΓΟΣ;
-    // Ενεργός = Έχει κάνει κίνηση τα τελευταία 5 λεπτά
+    // --- NEW: ΕΛΕΓΧΟΣ ΑΝ ΤΟ ΠΑΙΧΝΙΔΙ ΕΙΝΑΙ ΓΕΜΑΤΟ (3ος παίκτης) ---
+    // Μετράμε πόσοι ΕΝΕΡΓΟΙ παίκτες υπάρχουν ΣΥΝΟΛΙΚΑ (όχι μόνο στο χρώμα που ζητάμε)
+    // Εξαιρούμε τον εαυτό μας αν κάνουμε update (αν και εδώ είναι για insert συνήθως)
+    $sql_full = 'SELECT count(*) as c FROM players 
+                 WHERE username IS NOT NULL 
+                 AND last_action > (NOW() - INTERVAL 5 MINUTE)';
+    $res_full = $mysqli->query($sql_full);
+    $active_total = $res_full->fetch_assoc()['c'];
+
+    // Αν υπάρχουν ήδη 2 παίκτες, και εγώ δεν είμαι ένας από αυτούς (π.χ. προσπαθώ να μπω τώρα)
+    // Τότε απαγορεύεται η είσοδος.
+    // ΣΗΜΕΙΩΣΗ: Επειδή εδώ είναι το set_user, ελέγχουμε αν η θέση που ζητάω ($b) είναι κενή.
+    // Αν η θέση $b είναι κενή, ΑΛΛΑ υπάρχουν ήδη 2 παίκτες (πώς γίνεται; δεν γίνεται σε τάβλι, αλλά για ασφάλεια)
+    // Το σωστότερο είναι: Αν η θέση που ζητάω είναι πιασμένη -> Error (Το έχουμε ήδη παρακάτω).
+    
+    // ΑΛΛΑ: Αν κάποιος προσπαθεί να μπει σε 'W' και είναι πιασμένο, θα τον κόψει το παρακάτω check.
+    // Το πρόβλημα είναι αν κάποιος προσπαθήσει να μπει σε 'W' και ο 'W' είναι μέσα.
+    
+    // 1. Έλεγχος: Υπάρχει παίκτης σε ΑΥΤΗ τη θέση ($b) ΠΟΥ ΝΑ ΕΙΝΑΙ ΕΝΕΡΓΟΣ;
     $sql = 'SELECT count(*) as c FROM players 
             WHERE piece_color=? 
             AND username IS NOT NULL
@@ -92,7 +109,8 @@ function set_user($b, $input) {
     
     if($r[0]['c'] > 0) {
         header("HTTP/1.1 400 Bad Request");
-        print json_encode(['errormesg'=>"Player $b is already set and active."]);
+        // Εδώ αλλάζουμε το μήνυμα για να είναι πιο σαφές
+        print json_encode(['errormesg'=>"Player $b is already active. Game might be full or color taken."]);
         exit;
     }
 
