@@ -208,7 +208,7 @@ async function checkGameStatus() {
         } 
         else if (status.status === 'aborted') {
             alert("Ο αντίπαλος αποχώρησε (ή έληξε ο χρόνος). Κερδίσατε!");
-            window.location.href = 'index.php'; 
+            window.location.href = 'logout.php'; 
             return;
         }
         else {
