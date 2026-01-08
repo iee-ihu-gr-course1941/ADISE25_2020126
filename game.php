@@ -17,7 +17,7 @@ if (isset($_SESSION['player1_color']) && $_SESSION['player1_color'] == 'white') 
     $name_white = $_SESSION['player1_name'];
     $name_black = $_SESSION['player2_name'];
 } else {
-    $name_white = $_SESSION['player2_name'];
+    $name_white = $_SESSION['player2_name']; 
     $name_black = $_SESSION['player1_name'];
 }
 
@@ -153,8 +153,8 @@ $is_hotseat_js = (isset($_SESSION['game_mode']) && $_SESSION['game_mode'] === 'h
             <button id="btn-roll" onclick="rollDice()" class="btn btn-warning btn-lg" style="display:none;">Ρίξε τα Ζάρια!</button>
 
             <div id="game-controls" style="display:none; margin-top:15px;">
-                <button onclick="resetGame()" class="btn btn-secondary">Reset</button> 
-                <button onclick="updateAll()" class="btn btn-info">Refresh</button>
+                <button onclick="resetGame()" class="btn btn-primary">Επανεκκίνηση</button> 
+                <button onclick="updateAll()" class="btn btn-warning">Ανανέωση</button>
             </div>
         </div>
 
