@@ -14,7 +14,7 @@ if($input==null) {
     $input=[];
 }
 
-// Έλεγχος Token (όπως ο καθηγητής - για μελλοντική χρήση)
+// Έλεγχος Token 
 if (isset($_SERVER['HTTP_APP_TOKEN'])) {
     $input['token'] = $_SERVER['HTTP_APP_TOKEN'];
 } elseif (!isset($input['token'])) {
