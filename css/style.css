@@ -195,7 +195,7 @@ body {
 #controls { margin-top: 15px; text-align: center; }
 
 /* Reset / Refresh (Όπως παλιά: Γκρι, διακριτικά) */
-.btn-secondary {
+.btn-primary {
     padding: 8px 15px;
     font-size: 0.9rem;
     background-color: #7f8c8d;
