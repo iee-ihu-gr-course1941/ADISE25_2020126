@@ -154,17 +154,40 @@ async function checkGameStatus() {
         if (!response.ok) throw new Error("Status Fetch Error");
         const status = await response.json();
 
+        // 1. ΕΛΕΓΧΟΣ ΑΚΥΡΩΣΗΣ (ABORTED) - ΝΕΟΣ ΚΩΔΙΚΑΣ
+        if (status.status === 'aborted') {
+            
+            // Μετατροπή του myColor (που έχουμε από το PHP session) σε 'W'/'B'
+            let myColorCode = (myColor === 'white') ? 'W' : 'B';
+
+            // Αν το result στη βάση λέει ότι κέρδισα ΕΓΩ
+            if (status.result === myColorCode) {
+                alert("Ο αντίπαλος αποχώρησε (ή έληξε ο χρόνος). Κερδίσατε!");
+                // Στέλνουμε τον νικητή στο logout για να καθαρίσει και αυτός
+                window.location.href = 'logout.php'; 
+            } else {
+                // Αν δεν είμαι εγώ ο νικητής (άρα εγώ πάτησα έξοδο ή έχω ήδη φύγει), απλά φεύγω
+                window.location.href = 'index.php'; 
+            }
+            return; // Σταματάμε εδώ, δεν χρειάζεται να ενημερώσουμε το UI
+        }
+
+        // 2. ΕΝΗΜΕΡΩΣΗ ΖΑΡΙΩΝ (STATE)
         currentDice.d1 = status.dice1;
         currentDice.d2 = status.dice2;
         
+        // 3. ΕΛΕΓΧΟΣ ΣΕΙΡΑΣ (TURN)
         if (typeof isHotseat !== 'undefined' && isHotseat === true) {
+            // Στο Hotseat αλλάζουμε το "myColor" δυναμικά ανάλογα με το ποιος παίζει
             myColor = (status.p_turn === 'W') ? 'white' : 'black';
-            isMyTurn = true;
+            isMyTurn = true; // Πάντα είναι η σειρά "μας" στο Hotseat
         } else {
+            // Στο Online ελέγχουμε αν το χρώμα μας ταιριάζει με τη σειρά
             isMyTurn = (status.p_turn === 'W' && myColor === 'white') || 
                        (status.p_turn === 'B' && myColor === 'black');
         }
 
+        // 4. UI ELEMENTS
         const btnStart = document.getElementById('btn-start-game');
         const btnRollFirst = document.getElementById('btn-roll-first');
         const btnRoll = document.getElementById('btn-roll');
@@ -175,9 +198,11 @@ async function checkGameStatus() {
         const turnW = document.getElementById('turn-label-w');
         const turnB = document.getElementById('turn-label-b');
 
+        // Κρύβουμε αρχικά τα ταμπελάκια "Παίζει τώρα" (θα τα εμφανίσουμε αν χρειαστεί)
         if(turnW) turnW.style.display = 'none';
         if(turnB) turnB.style.display = 'none';
 
+        // 5. ΔΙΑΧΕΙΡΙΣΗ ΚΑΤΑΣΤΑΣΕΩΝ (STATUS)
         if (status.status === 'not active') {
             if(btnStart) btnStart.style.display = 'inline-block';
             if(btnRollFirst) btnRollFirst.style.display = 'none';
@@ -186,6 +211,7 @@ async function checkGameStatus() {
             if(gameControls) gameControls.style.display = 'none';
         } 
         else if (status.status === 'first_roll') {
+            // Φάση: Ποιος παίζει πρώτος
             if(btnStart) btnStart.style.display = 'none';
             if(btnRoll) btnRoll.style.display = 'none';
             if(gameControls) gameControls.style.display = 'block';
@@ -202,29 +228,28 @@ async function checkGameStatus() {
                 if(d1) d1.innerText = status.dice1;
                 if(d2) d2.innerText = "-";
             } 
-            else if (status.dice1 === null && status.dice2 === null) {
+            // Αν έχουν ριχτεί και τα δύο αλλά δεν άλλαξε status, σημαίνει ισοπαλία (π.χ. 6-6)
+            else if (status.dice1 !== null && status.dice2 !== null) {
                  btnRollFirst.innerText = "Ισοπαλία! Ξανά για " + pWhite;
             }
         } 
-        else if (status.status === 'aborted') {
-            alert("Ο αντίπαλος αποχώρησε (ή έληξε ο χρόνος). Κερδίσατε!");
-            window.location.href = 'logout.php'; 
-            return;
-        }
         else {
-            // STARTED
+            // Φάση: STARTED (Κανονικό Παιχνίδι)
             if(btnStart) btnStart.style.display = 'none';
             if(btnRollFirst) btnRollFirst.style.display = 'none'; 
             if(gameControls) gameControls.style.display = 'block';
 
-            if (status.p_turn === 'W' && turnW) turnW.style.display = 'block';
-            if (status.p_turn === 'B' && turnB) turnB.style.display = 'block';
+            // Εμφάνιση ετικέτας "Παίζει τώρα"
+            if (status.p_turn === 'W' && turnW) turnW.style.display = 'inline'; // Ή block/inline-block ανάλογα το CSS σου
+            if (status.p_turn === 'B' && turnB) turnB.style.display = 'inline';
             
             const hasDice = (status.dice1 !== null || status.dice2 !== null);
             
             if (hasDice) {
+                // Έχουμε ζάρια -> Δείξτα και κρύψε το κουμπί "Ρίξε"
                 if(diceDisplay) diceDisplay.style.display = 'block';
                 if(btnRoll) btnRoll.style.display = 'none';
+                
                 if(d1) {
                     d1.innerText = status.dice1 || "-";
                     d1.className = status.dice1 ? 'dice-box' : 'dice-box dice-used';
@@ -234,11 +259,13 @@ async function checkGameStatus() {
                     d2.className = status.dice2 ? 'dice-box' : 'dice-box dice-used';
                 }
             } else {
+                // Δεν έχουμε ζάρια -> Εμφάνισε κουμπί "Ρίξε" ΜΟΝΟ αν είναι η σειρά μου
                 if(diceDisplay) diceDisplay.style.display = 'none';
                 if(btnRoll) btnRoll.style.display = isMyTurn ? 'inline-block' : 'none';
             }
         }
         
+        // 6. ΕΝΗΜΕΡΩΣΗ ΣΚΟΡ
         const scoreW = document.getElementById('score-w');
         const scoreB = document.getElementById('score-b');
         if(scoreW) scoreW.innerText = status.score_w || 0;
