@@ -2,35 +2,58 @@
 require_once "lib/dbconnect.php"; 
 session_start();
 
-// Έλεγχος: Είμαι συνδεδεμένος;
-if (isset($_SESSION['my_color'])) {
+// Ελέγχουμε αν υπάρχει session, αλλιώς δεν μπορούμε να ξέρουμε το mode
+if (isset($_SESSION['game_mode']) && $_SESSION['game_mode'] == 'hotseat') {
+    // ===========================
+    // ΛΟΓΙΚΗ ΓΙΑ HOTSEAT (ΤΟΠΙΚΟ)
+    // ===========================
     
-    $my_color = $_SESSION['my_color']; 
-    $db_color = ($my_color === 'white') ? 'W' : 'B'; 
+    // 1. ΠΡΩΤΑ καθαρίζουμε το ταμπλό (που ίσως βάζει status='started')
+    $sql = "call clean_board()";
+    $mysqli->query($sql);
 
-    // 1. Ενημερώνουμε το status (Αν το παιχνίδι έτρεχε)
-    // Ελέγχουμε αν είναι ήδη aborted/ended για να μην χαλάσουμε το αποτέλεσμα του άλλου
-    $sql_status = "SELECT status FROM game_status";
-    $status_res = $mysqli->query($sql_status);
-    $current_status = $status_res->fetch_assoc()['status'];
+    // 2. ΜΕΤΑ σβήνουμε τους παίκτες
+    $sql = "UPDATE players SET username=NULL, token=NULL, last_action=NULL";
+    $mysqli->query($sql);
 
-    if ($current_status !== 'aborted' && $current_status !== 'ended') {
-        // Ορίζουμε νικητή τον ΑΝΤΙΠΑΛΟ
-        $winner = ($db_color === 'W') ? 'B' : 'W';
-        $sql = "UPDATE game_status SET status='aborted', result='$winner', p_turn=NULL";
-        $mysqli->query($sql);
+    // 3. ΚΑΙ ΤΕΛΟΣ βάζουμε το status σε 'not active' (για να ισχύσει αυτό σίγουρα)
+    $sql = "UPDATE game_status SET status='not active', p_turn=NULL, result=NULL, last_change=NOW()";
+    $mysqli->query($sql);
+
+} else {
+    // ===========================
+    // ΛΟΓΙΚΗ ΓΙΑ ONLINE
+    // ===========================
+    
+    // Εδώ κρατάμε την παλιά λογική: Αν φύγω εγώ, το παιχνίδι γίνεται aborted 
+    // και ίσως θέλουμε να νικήσει ο άλλος.
+    
+    if(isset($_SESSION['token'])) {
+        $token = $_SESSION['token'];
+        
+        // Βρίσκουμε ποιο χρώμα είμαι
+        $sql = "SELECT piece_color FROM players WHERE token = '$token'";
+        $res = $mysqli->query($sql);
+        
+        if ($row = $res->fetch_assoc()) {
+            $my_color = $row['piece_color'];
+            
+            // Κάνω εμένα NULL
+            $sql = "UPDATE players SET username=NULL, token=NULL WHERE token = '$token'";
+            $mysqli->query($sql);
+            
+            // Ενημερώνουμε το status σε aborted (αν ήταν active)
+            $sql = "UPDATE game_status SET status='aborted', result=IF('$my_color'='W','B','W') WHERE status='active'";
+            $mysqli->query($sql);
+        }
     }
-
-    // 2. ΔΙΑΓΡΑΦΟΥΜΕ ΜΟΝΟ ΤΟΝ ΕΑΥΤΟ ΜΑΣ (ΟΧΙ ΤΟΝ ΑΝΤΙΠΑΛΟ)
-    // Αφήνουμε τον αντίπαλο μέσα στη βάση, για να προλάβει να δει το μήνυμα νίκης!
-    // Όταν ο αντίπαλος πατήσει ΟΚ στο μήνυμα, θα έρθει κι αυτός εδώ και θα σβηστεί τότε.
-    $sql_clean_me = "UPDATE players SET username=NULL, token=NULL WHERE piece_color='$db_color'";
-    $mysqli->query($sql_clean_me);
 }
 
-// 3. Καθαρισμός Session και Επιστροφή στην Αρχική
+// Τέλος, καταστρέφουμε το Session του browser
 session_unset();
 session_destroy();
+
+// Επιστροφή στην αρχική
 header("Location: index.php");
-exit();
+exit;
 ?>
