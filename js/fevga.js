@@ -86,6 +86,8 @@ async function updateAll() {
 
 
 async function refreshBoard() {
+    if (isAnimating) return;
+    
     try {
         const response = await fetch('tavli.php/board/');
         if (!response.ok) throw new Error("Board Fetch Error");
@@ -154,55 +156,60 @@ async function checkGameStatus() {
         if (!response.ok) throw new Error("Status Fetch Error");
         const status = await response.json();
 
-        // 1. ΕΛΕΓΧΟΣ ΑΚΥΡΩΣΗΣ (ABORTED) - ΝΕΟΣ ΚΩΔΙΚΑΣ
+        // 1. ΕΛΕΓΧΟΣ ΑΚΥΡΩΣΗΣ (ABORTED / TIMEOUT)
         if (status.status === 'aborted') {
-            
-            // Μετατροπή του myColor (που έχουμε από το PHP session) σε 'W'/'B'
             let myColorCode = (myColor === 'white') ? 'W' : 'B';
-
-            // Αν το result στη βάση λέει ότι κέρδισα ΕΓΩ
             if (status.result === myColorCode) {
                 alert("Ο αντίπαλος αποχώρησε (ή έληξε ο χρόνος). Κερδίσατε!");
-                // Στέλνουμε τον νικητή στο logout για να καθαρίσει και αυτός
                 window.location.href = 'logout.php'; 
             } else {
-                // Αν δεν είμαι εγώ ο νικητής (άρα εγώ πάτησα έξοδο ή έχω ήδη φύγει), απλά φεύγω
                 window.location.href = 'index.php'; 
             }
-            return; // Σταματάμε εδώ, δεν χρειάζεται να ενημερώσουμε το UI
+            return;
         }
 
-        // 2. ΕΝΗΜΕΡΩΣΗ ΖΑΡΙΩΝ (STATE)
+        // 2. ΑΝΑΓΝΩΡΙΣΗ DEADLOCK (ΑΔΙΕΞΟΔΟ)
+        // Ελέγχουμε αν η σειρά άλλαξε στη βάση ενώ εμείς είχαμε ακόμα ζάρια
+        let dbTurn = status.p_turn;
+        let myTurnCode = (myColor === 'white') ? 'W' : 'B';
+
+        if (isMyTurn && dbTurn !== myTurnCode && (currentDice.d1 !== null || currentDice.d2 !== null)) {
+            // Αν το παιχνίδι τρέχει και η σειρά άλλαξε χωρίς να παίξουμε όλα τα ζάρια
+            if(status.status === 'started') {
+                alert("Δεν υπάρχουν άλλες έγκυρες κινήσεις! Η σειρά περνάει αυτόματα στον αντίπαλο.");
+            }
+        }
+
+        // 3. ΕΝΗΜΕΡΩΣΗ ΤΟΠΙΚΗΣ ΚΑΤΑΣΤΑΣΗΣ ΖΑΡΙΩΝ
         currentDice.d1 = status.dice1;
         currentDice.d2 = status.dice2;
         
-        // 3. ΕΛΕΓΧΟΣ ΣΕΙΡΑΣ (TURN)
+        // 4. ΕΛΕΓΧΟΣ ΣΕΙΡΑΣ (TURN MANAGEMENT)
         if (typeof isHotseat !== 'undefined' && isHotseat === true) {
-            // Στο Hotseat αλλάζουμε το "myColor" δυναμικά ανάλογα με το ποιος παίζει
+            // Στο Hotseat η σειρά αλλάζει δυναμικά για τον ίδιο χρήστη
             myColor = (status.p_turn === 'W') ? 'white' : 'black';
-            isMyTurn = true; // Πάντα είναι η σειρά "μας" στο Hotseat
+            isMyTurn = true; 
         } else {
-            // Στο Online ελέγχουμε αν το χρώμα μας ταιριάζει με τη σειρά
+            // Στο Online παίζεις μόνο αν το χρώμα σου ταιριάζει με τη σειρά στη βάση
             isMyTurn = (status.p_turn === 'W' && myColor === 'white') || 
                        (status.p_turn === 'B' && myColor === 'black');
         }
 
-        // 4. UI ELEMENTS
+        // 5. ΔΙΑΧΕΙΡΙΣΗ UI ΣΤΟΙΧΕΙΩΝ (Κουμπιά & Labels)
         const btnStart = document.getElementById('btn-start-game');
         const btnRollFirst = document.getElementById('btn-roll-first');
         const btnRoll = document.getElementById('btn-roll');
         const diceDisplay = document.getElementById('dice-display');
-        const d1 = document.getElementById('d1'); 
-        const d2 = document.getElementById('d2');
+        const d1Box = document.getElementById('d1'); 
+        const d2Box = document.getElementById('d2');
         const gameControls = document.getElementById('game-controls'); 
         const turnW = document.getElementById('turn-label-w');
         const turnB = document.getElementById('turn-label-b');
 
-        // Κρύβουμε αρχικά τα ταμπελάκια "Παίζει τώρα" (θα τα εμφανίσουμε αν χρειαστεί)
+        // Κρύβουμε τα labels "Παίζει τώρα"
         if(turnW) turnW.style.display = 'none';
         if(turnB) turnB.style.display = 'none';
 
-        // 5. ΔΙΑΧΕΙΡΙΣΗ ΚΑΤΑΣΤΑΣΕΩΝ (STATUS)
         if (status.status === 'not active') {
             if(btnStart) btnStart.style.display = 'inline-block';
             if(btnRollFirst) btnRollFirst.style.display = 'none';
@@ -211,67 +218,57 @@ async function checkGameStatus() {
             if(gameControls) gameControls.style.display = 'none';
         } 
         else if (status.status === 'first_roll') {
-            // Φάση: Ποιος παίζει πρώτος
             if(btnStart) btnStart.style.display = 'none';
             if(btnRoll) btnRoll.style.display = 'none';
             if(gameControls) gameControls.style.display = 'block';
             if(btnRollFirst) btnRollFirst.style.display = 'inline-block';
             if(diceDisplay) diceDisplay.style.display = 'block'; 
 
-            if (status.dice1 === null && status.dice2 === null) {
-                btnRollFirst.innerText = "🎲 Ζάρι για " + pWhite; 
-                if(d1) d1.innerText = "-";
-                if(d2) d2.innerText = "-";
-            } 
-            else if (status.dice1 !== null && status.dice2 === null) {
-                btnRollFirst.innerText = "🎲 Ζάρι για " + pBlack; 
-                if(d1) d1.innerText = status.dice1;
-                if(d2) d2.innerText = "-";
-            } 
-            // Αν έχουν ριχτεί και τα δύο αλλά δεν άλλαξε status, σημαίνει ισοπαλία (π.χ. 6-6)
-            else if (status.dice1 !== null && status.dice2 !== null) {
-                 btnRollFirst.innerText = "Ισοπαλία! Ξανά για " + pWhite;
-            }
+            if(d1Box) d1Box.innerText = status.dice1 || "-";
+            if(d2Box) d2Box.innerText = status.dice2 || "-";
         } 
-        else {
-            // Φάση: STARTED (Κανονικό Παιχνίδι)
+        else if (status.status === 'started') {
             if(btnStart) btnStart.style.display = 'none';
             if(btnRollFirst) btnRollFirst.style.display = 'none'; 
             if(gameControls) gameControls.style.display = 'block';
 
             // Εμφάνιση ετικέτας "Παίζει τώρα"
-            if (status.p_turn === 'W' && turnW) turnW.style.display = 'inline'; // Ή block/inline-block ανάλογα το CSS σου
-            if (status.p_turn === 'B' && turnB) turnB.style.display = 'inline';
+            if (status.p_turn === 'W' && turnW) turnW.style.display = 'inline-block';
+            if (status.p_turn === 'B' && turnB) turnB.style.display = 'inline-block';
             
             const hasDice = (status.dice1 !== null || status.dice2 !== null);
             
             if (hasDice) {
-                // Έχουμε ζάρια -> Δείξτα και κρύψε το κουμπί "Ρίξε"
                 if(diceDisplay) diceDisplay.style.display = 'block';
                 if(btnRoll) btnRoll.style.display = 'none';
                 
-                if(d1) {
-                    d1.innerText = status.dice1 || "-";
-                    d1.className = status.dice1 ? 'dice-box' : 'dice-box dice-used';
+                if(d1Box) {
+                    d1Box.innerText = status.dice1 || "-";
+                    d1Box.className = status.dice1 ? 'dice-box' : 'dice-box dice-used';
                 }
-                if(d2) {
-                    d2.innerText = status.dice2 || "-";
-                    d2.className = status.dice2 ? 'dice-box' : 'dice-box dice-used';
+                if(d2Box) {
+                    d2Box.innerText = status.dice2 || "-";
+                    d2Box.className = status.dice2 ? 'dice-box' : 'dice-box dice-used';
                 }
             } else {
-                // Δεν έχουμε ζάρια -> Εμφάνισε κουμπί "Ρίξε" ΜΟΝΟ αν είναι η σειρά μου
                 if(diceDisplay) diceDisplay.style.display = 'none';
+                // Εμφάνιση κουμπιού "Ρίξε" μόνο αν είναι η σειρά μου
                 if(btnRoll) btnRoll.style.display = isMyTurn ? 'inline-block' : 'none';
             }
         }
         
-        // 6. ΕΝΗΜΕΡΩΣΗ ΣΚΟΡ
+        // 6. ΕΝΗΜΕΡΩΣΗ ΣΚΟΡ ΚΑΙ ΜΑΖΕΜΑΤΟΣ
         const scoreW = document.getElementById('score-w');
         const scoreB = document.getElementById('score-b');
         if(scoreW) scoreW.innerText = status.score_w || 0;
         if(scoreB) scoreB.innerText = status.score_b || 0;
 
-    } catch (error) { console.error("Status Error:", error); }
+        // Προαιρετικά: Ενημέρωση των "Off" (πουλιών που βγήκαν) αν έχεις αντίστοιχα IDs
+        // console.log("White Off: " + status.w_off + " Black Off: " + status.b_off);
+
+    } catch (error) { 
+        console.error("Status Error:", error); 
+    }
 }
 
 
@@ -357,43 +354,66 @@ async function rollDice() {
 
 
 
-
 function showSuggestions(startPos) {
     const d1 = parseInt(currentDice.d1) || 0;
     const d2 = parseInt(currentDice.d2) || 0;
     const targets = new Set();
+    
     const selectedSquare = boardState.find(sq => parseInt(sq.x) === startPos);
-    const pieceCount = selectedSquare ? parseInt(selectedSquare.piece_count) : 0;
-    const isFirstMove = (pieceCount === 15);
+    const isMana = (selectedSquare && parseInt(selectedSquare.piece_count) === 15);
 
-    const getTarget = (start, steps) => {
-        let t = start - steps; 
-        if (t < 1) return -1; 
-        const targetSquare = boardState.find(sq => parseInt(sq.x) === t);
-        if (targetSquare && parseInt(targetSquare.piece_count) > 0) {
-            if (targetSquare.piece_color !== (myColor === 'white' ? 'W' : 'B')) return -1;
+    // Βοηθητική συνάρτηση για τον έλεγχο ορίων
+    const getValidTarget = (start, steps) => {
+        let t = start;
+        for (let i = 0; i < steps; i++) {
+            t--;
+            if (t < 1) t = 24;
+        }
+
+        // --- ΕΛΕΓΧΟΣ ΟΡΙΩΝ ΦΕΥΓΑ ---
+        if (myColor === 'white') {
+            // Τα άσπρα τερματίζουν στο 1. Αν από θέση 1-6 καταλήξουν σε 7-24, είναι "δεύτερος γύρος" (ΛΑΘΟΣ)
+            if (start >= 1 && start <= 6 && t > 6) return null;
+        } else {
+            // Τα μαύρα τερματίζουν στο 13. Αν από θέση 13-18 καταλήξουν σε 1-12 ή 19-24 (ΛΑΘΟΣ)
+            if (start >= 13 && start <= 18 && (t < 13 || t > 18)) return null;
         }
         return t;
     };
 
-    if (isFirstMove && d1 > 0 && d2 > 0) {
-        let tSum = getTarget(startPos, d1 + d2);
-        if (tSum !== -1) targets.add(tSum);
-        else if (d1 === 6 && d2 === 6) {
-            let tHalf = getTarget(startPos, 6);
-            if (tHalf !== -1) targets.add(tHalf);
+    const isAvailable = (t) => {
+        if (t === null) return false;
+        const targetSquare = boardState.find(sq => parseInt(sq.x) === t);
+        const myColorCode = (myColor === 'white' ? 'W' : 'B');
+        if (targetSquare && parseInt(targetSquare.piece_count) > 0 && targetSquare.piece_color !== myColorCode) return false;
+        return true;
+    };
+
+    if (isMana) {
+        if (d1 === 6 && d2 === 6) {
+            let t = getValidTarget(startPos, 6);
+            if(isAvailable(t)) targets.add(t);
+        } else if (d1 > 0 && d2 > 0) {
+            let tSum = getValidTarget(startPos, d1 + d2);
+            if(isAvailable(tSum)) targets.add(tSum);
         }
     } else {
-        if(d1 > 0) { let t = getTarget(startPos, d1); if(t!==-1) targets.add(t); }
-        if(d2 > 0) { let t = getTarget(startPos, d2); if(t!==-1) targets.add(t); }
-        if(d1>0 && d2>0) { let t = getTarget(startPos, d1+d2); if(t!==-1) targets.add(t); }
+        if(d1 > 0) { let t = getValidTarget(startPos, d1); if(isAvailable(t)) targets.add(t); }
+        if(d2 > 0) { let t = getValidTarget(startPos, d2); if(isAvailable(t)) targets.add(t); }
+        if(d1 > 0 && d2 > 0) { 
+            let tSum = getValidTarget(startPos, d1 + d2); 
+            if(isAvailable(tSum)) targets.add(tSum); 
+        }
     }
 
-    targets.forEach(target => {
-        const point = document.getElementById('p' + target);
-        if(point) point.classList.add('possible-move');
+    targets.forEach(t => {
+        if (t !== null) {
+            const point = document.getElementById('p' + t);
+            if(point) point.classList.add('possible-move');
+        }
     });
 }
+
 
 function selectPiece(position) {
     const posInt = parseInt(position);
@@ -401,6 +421,7 @@ function selectPiece(position) {
     else selectedPieceId = posInt;
     updateAll(); 
 }
+
 
 async function handlePointClick(targetPosInput) {
     const targetPos = parseInt(targetPosInput);
@@ -417,16 +438,10 @@ async function handlePointClick(targetPosInput) {
             alert(res.error);
         } else {
             selectedPieceId = null; 
-            await refreshBoard(); 
-            setTimeout(async () => {
-                // ΕΔΩ ΕΓΙΝΕ Η ΑΛΛΑΓΗ ΓΙΑ ΤΟ GAME OVER
-                // Απενεργοποίησα το alert για να μην σου βγαίνει λάθος
-                if (res.game_over) {
-                   // alert("ΤΕΛΟΣ ΠΑΙΧΝΙΔΙΟΥ"); 
-                   // return; 
-                }
-                await checkGameStatus();
-            }, 500); 
+            // Σημαντικό: Πρώτα ελέγχουμε το status για να αλλάξει το myColor (ειδικά στο Hotseat)
+            // και μετά κάνουμε refresh το board.
+            await checkGameStatus(); 
+            await refreshBoard();
         }
     } catch (e) { console.error(e); }
 }
@@ -472,19 +487,13 @@ async function loginPlayer(name, colorCode) {
 
 
 document.addEventListener('DOMContentLoaded', async () => { 
-    // 1. Χρησιμοποιούμε τις μεταβλητές pWhite και pBlack που έχεις ήδη στο game.php!
-    
-    // Αν υπάρχει όνομα για τον Λευκό, κάντον Login
-    if (typeof pWhite !== 'undefined' && pWhite) {
-        await loginPlayer(pWhite, 'W');
-    }
+    if (typeof pWhite !== 'undefined' && pWhite) await loginPlayer(pWhite, 'W');
+    if (typeof pBlack !== 'undefined' && pBlack) await loginPlayer(pBlack, 'B');
 
-    // Αν υπάρχει όνομα για τον Μαύρο, κάντον Login
-    if (typeof pBlack !== 'undefined' && pBlack) {
-        await loginPlayer(pBlack, 'B');
-    }
-
-    // 2. Αφού τελειώσει το Login, ξεκινάμε την ενημέρωση του παιχνιδιού
     updateAll(); 
-    setInterval(updateAll, 3000); 
+
+    // Ασφάλεια για τον Server
+    if (isHotseat === false) {
+        setInterval(updateAll, 6000); 
+    }
 });
