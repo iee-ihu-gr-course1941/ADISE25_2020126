@@ -18,7 +18,11 @@ INSERT INTO `board` (`x`, `piece_count`, `piece_color`) VALUES
 (13,0,null),(14,0,null),(15,0,null),(16,0,null),(17,0,null),(18,0,null),
 (19,0,null),(20,0,null),(21,0,null),(22,0,null),(23,0,null),(24,0,null);
 
+
 -- 2. ΠΙΝΑΚΑΣ PLAYERS (Παίκτες)
+-- ΠΡΟΣΘΕΣΑΜΕ ΑΥΤΗ ΤΗ ΓΡΑΜΜΗ ΓΙΑ ΝΑ ΜΗΝ ΒΓΑΖΕΙ ERROR 1050
+DROP TABLE IF EXISTS `players`; 
+
 CREATE TABLE players (
     piece_color ENUM('W','B') PRIMARY KEY,
     username VARCHAR(255),
@@ -50,8 +54,8 @@ INSERT INTO `game_status`
 (`status`, `p_turn`, `result`, `dice1`, `dice2`, `w_off`, `b_off`, `score_w`, `score_b`) VALUES 
 ('not active', NULL, NULL, NULL, NULL, 0, 0, 0, 0);
 
--- 4. ΔΙΑΔΙΚΑΣΙΕΣ (STORED PROCEDURES)
 
+-- 4. ΔΙΑΔΙΚΑΣΙΕΣ (STORED PROCEDURES)
 DELIMITER //
 
 -- clean_board: Καθαρίζει και στήνει το παιχνίδι για ΦΕΥΓΑ
@@ -62,10 +66,10 @@ BEGIN
     UPDATE board SET piece_count = 0, piece_color = null;
 
     -- ΣΤΗΣΙΜΟ ΦΕΥΓΑ
-    -- Άσπρα (W): 15 πούλια στη θέση 24 (Πίνακας)
+    -- Άσπρα (W): 15 πούλια στη θέση 24
     UPDATE board SET piece_count = 15, piece_color = 'W' WHERE x = 24;
     
-    -- Μαύρα (B): 15 πούλια στη θέση 12 (Πίνακας)
+    -- Μαύρα (B): 15 πούλια στη θέση 12
     UPDATE board SET piece_count = 15, piece_color = 'B' WHERE x = 12;
     
     -- Ενημέρωση Status: Το παιχνίδι ξεκινάει, παίζει ο Άσπρος
