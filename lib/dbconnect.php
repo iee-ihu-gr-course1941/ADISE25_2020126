@@ -1,6 +1,5 @@
 <?php
 // lib/dbconnect.php
-
 $host = 'localhost';
 $db = 'tavli';
 require_once "db_upass.php";
@@ -23,4 +22,5 @@ if ($mysqli->connect_errno) {
 }
 
 $mysqli->set_charset("utf8");
+
 ?>
