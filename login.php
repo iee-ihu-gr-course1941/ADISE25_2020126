@@ -1,6 +1,6 @@
 <?php
 // login.php
-require_once "lib/dbconnect.php"; // Χρειαζόμαστε τη βάση για τον έλεγχο
+require_once "lib/dbconnect.php"; 
 session_start();
 
 // --- ΕΛΕΓΧΟΣ ΚΑΤΑΣΤΑΣΗΣ ΠΑΙΧΝΙΔΙΟΥ (ONLINE MODE) ---
@@ -8,7 +8,6 @@ $game_full = false;
 $taken_color = null;
 
 if (isset($_GET['mode']) && $_GET['mode'] == 'online') {
-    // 1. Έλεγχος: Είναι γεμάτο το παιχνίδι; (2 ενεργοί παίκτες)
     $sql = "SELECT count(*) as c FROM players WHERE username IS NOT NULL AND last_action > (NOW() - INTERVAL 5 MINUTE)";
     $res = $mysqli->query($sql);
     $active_players = $res->fetch_assoc()['c'];
@@ -17,12 +16,11 @@ if (isset($_GET['mode']) && $_GET['mode'] == 'online') {
         $game_full = true;
     }
 
-    // 2. Έλεγχος: Ποιο χρώμα είναι πιασμένο;
     if (!$game_full) {
         $sql = "SELECT piece_color FROM players WHERE username IS NOT NULL AND last_action > (NOW() - INTERVAL 5 MINUTE)";
         $res = $mysqli->query($sql);
         if ($row = $res->fetch_assoc()) {
-            $taken_color = $row['piece_color']; // 'W' ή 'B'
+            $taken_color = $row['piece_color']; 
         }
     }
 }
@@ -42,12 +40,6 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
     $p2 = isset($_POST['player2']) ? trim($_POST['player2']) : '';
     $p1_color = isset($_POST['p1_color']) ? $_POST['p1_color'] : 'white';
 
-    // Backend Έλεγχος για το χρώμα
-    if ($_SESSION['game_mode'] == 'online') {
-        // Ξανακάνουμε τον έλεγχο μήπως μας πρόλαβε άλλος στο κλάσμα του δευτερολέπτου
-        // (Θα το καλύψει και το players.php, αλλά καλό είναι να υπάρχει κι εδώ)
-    }
-
     if (empty($p1)) {
         $_SESSION['error'] = "Παρακαλώ συμπληρώστε το όνομά σας!";
         header("Location: login.php"); 
@@ -61,9 +53,47 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
         exit();
     }
 
+    // Αποθήκευση στο Session
     $_SESSION['player1_name'] = $p1;
     $_SESSION['player2_name'] = $p2;
     $_SESSION['player1_color'] = $p1_color;
+
+    // ---------------------------------------------------------
+    // --- ΝΕΟΣ ΚΩΔΙΚΑΣ: ΕΓΓΡΑΦΗ ΣΤΗ ΒΑΣΗ ΔΕΔΟΜΕΝΩΝ (SQL) ---
+    // ---------------------------------------------------------
+    
+    // Δημιουργούμε ένα μοναδικό Token για τον παίκτη
+    $token = md5(uniqid(rand(), true));
+    $_SESSION['token'] = $token; // Το αποθηκεύουμε για να ξέρουμε ποιοι είμαστε
+
+    if ($is_hotseat) {
+        // ΑΝ ΕΙΝΑΙ HOTSEAT: Ενημερώνουμε και τους δύο παίκτες
+        // 1. Παίκτης 1
+        $c1_db = ($p1_color == 'white') ? 'W' : 'B';
+        $sql = "UPDATE players SET username=?, token=?, last_action=NOW() WHERE piece_color=?";
+        $st = $mysqli->prepare($sql);
+        $st->bind_param('sss', $p1, $token, $c1_db);
+        $st->execute();
+
+        // 2. Παίκτης 2
+        $c2_db = ($c1_db == 'W') ? 'B' : 'W';
+        $sql = "UPDATE players SET username=?, token=?, last_action=NOW() WHERE piece_color=?";
+        $st = $mysqli->prepare($sql);
+        $st->bind_param('sss', $p2, $token, $c2_db); // Χρησιμοποιούμε το ίδιο token στο Hotseat για ευκολία
+        $st->execute();
+
+    } else {
+        // ΑΝ ΕΙΝΑΙ ONLINE: Ενημερώνουμε μόνο τον εαυτό μας
+        $color_db = ($p1_color == 'white') ? 'W' : 'B';
+        
+        $sql = "UPDATE players SET username=?, token=?, last_action=NOW() WHERE piece_color=?";
+        $st = $mysqli->prepare($sql);
+        $st->bind_param('sss', $p1, $token, $color_db);
+        $st->execute();
+    }
+    // ---------------------------------------------------------
+    // --- ΤΕΛΟΣ ΝΕΟΥ ΚΩΔΙΚΑ ---
+    // ---------------------------------------------------------
     
     header("Location: game.php");
     exit();
@@ -90,7 +120,6 @@ unset($_SESSION['error']);
         input[type="text"], select { width: 100%; padding: 10px; margin-bottom: 15px; border-radius: 5px; border: 1px solid #ddd; box-sizing: border-box; font-size: 1rem;}
         .btn-login { width: 100%; padding: 12px; background-color: #f39c12; color: white; border: none; border-radius: 5px; cursor: pointer; font-weight: bold; font-size: 1.1rem; transition: 0.3s;}
         .btn-login:hover { background-color: #e67e22; }
-        .btn-disabled { background-color: #95a5a6; cursor: not-allowed; }
         .error-msg { color: #e74c3c; font-weight: bold; margin-bottom: 15px; }
         .full-msg { color: #e74c3c; font-size: 1.2rem; font-weight: bold; margin: 20px 0; }
         label { display: block; text-align: left; font-weight: bold; margin-bottom: 5px; color: #2c3e50; }
@@ -105,11 +134,9 @@ unset($_SESSION['error']);
     <?php if($error): ?><div class="error-msg"><?php echo $error; ?></div><?php endif; ?>
 
     <?php if (!$is_hotseat && $game_full): ?>
-        
         <div class="full-msg">⚠️ Το παιχνίδι είναι πλήρες!</div>
         <p>Υπάρχουν ήδη 2 παίκτες συνδεδεμένοι.</p>
         <a href="index.php" class="btn-login" style="display:block; text-decoration:none; background:#34495e;">Επιστροφή</a>
-
     <?php else: ?>
         <form action="login.php" method="POST"> 
             <label for="player1">Όνομα Παίκτη 1:</label>
@@ -138,7 +165,7 @@ unset($_SESSION['error']);
             <label for="p2_color_display">Ο Παίκτης 2 παίζει με:</label>
             <select id="p2_color_display">
                 <option value="black" selected>Μαύρα</option>
-                <option value="white">Άσπρα</option>
+                <option value="white">Άσπρα</option> 
             </select>
             <?php endif; ?>
 
