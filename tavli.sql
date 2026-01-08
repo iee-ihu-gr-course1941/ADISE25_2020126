@@ -54,6 +54,8 @@ INSERT INTO `game_status`
 (`status`, `p_turn`, `result`, `dice1`, `dice2`, `w_off`, `b_off`, `score_w`, `score_b`) VALUES 
 ('not active', NULL, NULL, NULL, NULL, 0, 0, 0, 0);
 
+ALTER TABLE game_status ADD COLUMN moves_left tinyint DEFAULT 0;
+
 
 -- 4. ΔΙΑΔΙΚΑΣΙΕΣ (STORED PROCEDURES)
 DELIMITER //
