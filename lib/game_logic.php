@@ -6,25 +6,30 @@ function handle_status($method, $input=null) {
     if($method=='GET') {
         show_status();
     } elseif($method=='POST') {
-        if(isset($input['action']) && $input['action'] == 'start') {
-            global $mysqli;
-            $mysqli->query("CALL clean_board()");
-            show_status();
-        }
-        elseif(isset($input['action']) && $input['action'] == 'roll_first') {
-            handle_roll_first();
-        }
-        elseif(isset($input['action']) && $input['action'] == 'move') {
-            $from = intval($input['from']);
-            $to = intval($input['to']);
-            $col = isset($input['color']) ? $input['color'] : 'white'; 
-            move_piece($from, $to, $col);
-        }
-        elseif(isset($input['action']) && $input['action'] == 'surrender') {
-            surrender($input['color']);
-        }
-        else {
-            roll_dice();
+        try {
+            if(isset($input['action']) && $input['action'] == 'start') {
+                global $mysqli;
+                $mysqli->query("CALL clean_board()");
+                show_status();
+            }
+            elseif(isset($input['action']) && $input['action'] == 'roll_first') {
+                handle_roll_first();
+            }
+            elseif(isset($input['action']) && $input['action'] == 'move') {
+                $from = intval($input['from']);
+                $to = intval($input['to']);
+                $col = isset($input['color']) ? $input['color'] : 'white'; 
+                move_piece($from, $to, $col);
+            }
+            elseif(isset($input['action']) && $input['action'] == 'surrender') {
+                surrender($input['color']);
+            }
+            else {
+                roll_dice();
+            }
+        } catch (Exception $e) {
+            require_once('/logger.php');
+            app_log('handle status: ' . $e);
         }
     }
 }

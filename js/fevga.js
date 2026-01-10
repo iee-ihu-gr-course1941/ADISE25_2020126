@@ -10,10 +10,11 @@ let currentMovesLeft = 0;
 
 async function startGame() { 
     try {
-        await fetch('tavli.php/status/', { 
+        let res = await fetch('tavli.php/status/', { 
             method: 'POST', 
             body: JSON.stringify({ action: 'start' }) 
         }); 
+        console.log('res ' + res.status)
         updateAll(); 
     } catch(e) { 
         console.error(e); 

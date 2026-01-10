@@ -1,8 +1,9 @@
 <?php
 // lib/dbconnect.php
-$host = '127.0.0.1';
-$db = 'tavli';
+$host = 'localhost'; //'195.251.123.31';
+$db = 'tavli'; 
 require_once "db_upass.php";
+
 
 $user = $DB_USER;
 $pass = $DB_PASS;
@@ -18,7 +19,8 @@ if(gethostname() == 'users.iee.ihu.gr') {
 
 // Αν υπάρχει λάθος, το εμφανίζουμε (για να ξέρουμε τι φταίει)
 if ($mysqli->connect_errno) {
-    echo "Απέτυχε η σύνδεση στη MySQL: (" . $mysqli->connect_errno . ") " . $mysqli->connect_error;
+    var_dump("Απέτυχε η σύνδεση στη MySQL: (" . $mysqli->connect_errno . ") " . $mysqli->connect_error);
+    die();
 }
 
 $mysqli->set_charset("utf8");

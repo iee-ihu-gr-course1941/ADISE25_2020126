@@ -1,11 +1,13 @@
 <?php
+
 // login.php
-require_once "lib/dbconnect.php"; 
+require_once "./lib/dbconnect.php"; 
 session_start();
 
 // --- ΕΛΕΓΧΟΣ ΚΑΤΑΣΤΑΣΗΣ ΠΑΙΧΝΙΔΙΟΥ (ONLINE MODE) ---
 $game_full = false;
 $taken_color = null;
+
 
 if (isset($_GET['mode']) && $_GET['mode'] == 'online') {
     $sql = "SELECT count(*) as c FROM players WHERE username IS NOT NULL AND last_action > (NOW() - INTERVAL 5 MINUTE)";
