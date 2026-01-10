@@ -73,6 +73,7 @@ $is_hotseat_js = (isset($_SESSION['game_mode']) && $_SESSION['game_mode'] === 'h
     <link href="css/style.css" rel="stylesheet"> 
 
     <script src="bootstrap/jquery-3.2.1.min.js"></script>
+    <script src="bootstrap/popper.min.js"></script> 
     <script src="bootstrap/bootstrap.min.js"></script>
     
     </head>
