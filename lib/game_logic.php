@@ -17,7 +17,6 @@ function handle_status($method, $input=null) {
         elseif(isset($input['action']) && $input['action'] == 'move') {
             $from = intval($input['from']);
             $to = intval($input['to']);
-            // Προστασία αν δεν ορίστηκε color
             $col = isset($input['color']) ? $input['color'] : 'white'; 
             move_piece($from, $to, $col);
         }
@@ -35,58 +34,28 @@ function show_status() {
     $res = $mysqli->query("SELECT * FROM game_status LIMIT 1");
     if($res) {
         echo json_encode($res->fetch_assoc(), JSON_PRETTY_PRINT);
-    } else {
-        echo json_encode(['status' => 'error', 'msg' => 'Database error']);
     }
-}
-
-function reset_status() {
-    global $mysqli;
-    // Επαναφορά του game_status στην αρχική κατάσταση
-    $sql = "UPDATE game_status SET status='not active', p_turn='W', dice1=NULL, dice2=NULL, result=NULL";
-    $mysqli->query($sql);
 }
 
 function update_game_status() {
     global $mysqli;
+    $res = $mysqli->query("SELECT status FROM game_status LIMIT 1");
+    $status = $res->fetch_assoc()['status'];
     
-    // 1. Διαβάζουμε την τρέχουσα κατάσταση
-    $status = $mysqli->query("SELECT status FROM game_status")->fetch_assoc()['status'];
-    
-    // 2. Αν το παιχνίδι είναι 'started', ελέγχουμε για Timeout
-    if($status == 'started') {
-        // ΔΙΟΡΘΩΣΗ: Ζητάμε SELECT * (όλα τα πεδία) και όχι count, 
-        // για να μπορούμε να διαβάσουμε το piece_color του παίκτη που κοιμήθηκε.
-        $sql = "SELECT * FROM players WHERE last_action < (NOW() - INTERVAL 5 MINUTE) AND username IS NOT NULL";
-        $st = $mysqli->prepare($sql);
-        $st->execute();
-        $res = $st->get_result();
+    $sql_players = "SELECT count(*) as c FROM players WHERE username IS NOT NULL AND last_action > (NOW() - INTERVAL 5 MINUTE)";
+    $active_players = $mysqli->query($sql_players)->fetch_assoc()['c'];
 
-        // Αν βρέθηκε παίκτης (δηλαδή η fetch_assoc επιστρέψει δεδομένα)
-        if ($row = $res->fetch_assoc()) {
-            // Βρήκαμε παίκτη που "κοιμήθηκε"!
-            $sleeping_color = $row['piece_color']; // 'W' ή 'B'
-            
-            // Ο νικητής είναι ο αντίπαλος
-            $winner = ($sleeping_color == 'W') ? 'B' : 'W';
-
-            // α. Ενημερώνουμε το status σε aborted και ορίζουμε τον νικητή
-            $mysqli->query("UPDATE game_status SET status='aborted', result='$winner', p_turn=NULL");
-
-            // β. Διαγράφουμε ΜΟΝΟ τον παίκτη που άργησε
-            $mysqli->query("UPDATE players SET username=NULL, token=NULL WHERE piece_color='$sleeping_color'");
-        }
-        
-        // ΣΗΜΕΙΩΣΗ: Αφαίρεσα το if($res['c'] > 0)... ήταν λάθος και περιττό.
+    if ($status == 'not active' && $active_players == 2) {
+        $mysqli->query("UPDATE game_status SET status='first_roll', last_change=NOW()");
     }
-    // 3. Αν το παιχνίδι ΔΕΝ είναι started, ελέγχουμε μήπως πρέπει να ξεκινήσει!
-    else {
-        $sql = "SELECT count(*) as c FROM players WHERE username IS NOT NULL";
-        $result = $mysqli->query($sql)->fetch_assoc();
-        
-        if($result['c'] == 2) {
-            // Θέτουμε status='started' και p_turn='W' ΜΟΝΟ την πρώτη φορά
-            $mysqli->query("UPDATE game_status SET status='started', p_turn='W'");
+    elseif ($status == 'started') {
+        $sql_timeout = "SELECT piece_color FROM players WHERE last_action < (NOW() - INTERVAL 5 MINUTE) AND username IS NOT NULL";
+        $res_timeout = $mysqli->query($sql_timeout);
+        if ($row = $res_timeout->fetch_assoc()) {
+            $sleeping_color = $row['piece_color'];
+            $winner = ($sleeping_color == 'W') ? 'B' : 'W';
+            $mysqli->query("UPDATE game_status SET status='aborted', result='$winner', p_turn=NULL");
+            $mysqli->query("UPDATE players SET username=NULL, token=NULL WHERE piece_color='$sleeping_color'");
         }
     }
 }
@@ -94,8 +63,7 @@ function update_game_status() {
 function handle_roll_first() {
     global $mysqli;
     $res = $mysqli->query("SELECT dice1, dice2 FROM game_status LIMIT 1")->fetch_assoc();
-    $d1 = $res['dice1'];
-    $d2 = $res['dice2'];
+    $d1 = $res['dice1']; $d2 = $res['dice2'];
 
     if ($d1 === NULL) {
         $d1 = rand(1, 6);
@@ -104,44 +72,50 @@ function handle_roll_first() {
         $d2 = rand(1, 6);
         if($d1 != $d2) {
             $start_turn = ($d1 > $d2) ? 'W' : 'B';
-            // Ορίζουμε 2 κινήσεις αφού τα ζάρια είναι διαφορετικά
-            $mysqli->query("UPDATE game_status SET dice2=$d2, status='started', p_turn='$start_turn', moves_left=2");
+            $mysqli->query("UPDATE game_status SET dice2=$d2, status='started', p_turn='$start_turn', moves_left=0");
         } else {
-            // Ισοπαλία - ξαναρίχνουν
             $mysqli->query("UPDATE game_status SET dice1=NULL, dice2=NULL"); 
         }
     }
     show_status();
 }
 
+function roll_dice() {
+    global $mysqli;
+    $st = $mysqli->query("SELECT * FROM game_status LIMIT 1")->fetch_assoc();
+    if($st['moves_left'] > 0) { show_status(); return; }
+    
+    $d1 = rand(1,6); $d2 = rand(1,6);
+    $moves = ($d1 == $d2) ? 4 : 2;
+    $mysqli->query("UPDATE game_status SET dice1=$d1, dice2=$d2, moves_left=$moves WHERE status='started'");
+    
+    // Επανέλεγχος αν ο παίκτης μπορεί να κουνήσει
+    if (!can_player_move($st['p_turn'])) {
+        $next = ($st['p_turn'] == 'W') ? 'B' : 'W';
+        $mysqli->query("UPDATE game_status SET p_turn='$next', dice1=NULL, dice2=NULL, moves_left=0");
+    }
+    show_status();
+}
 
 function move_piece($from, $to, $playerColor) {
     global $mysqli;
-    $status = $mysqli->query("SELECT * FROM game_status")->fetch_assoc();
+    $status = $mysqli->query("SELECT * FROM game_status LIMIT 1")->fetch_assoc();
     $pCode = ($playerColor == 'white') ? 'W' : 'B';
-    
+
     if($status['p_turn'] != $pCode) {
         header("HTTP/1.1 400 Bad Request");
-        echo json_encode(['error' => 'Δεν είναι η σειρά σου!']); return;
+        echo json_encode(['error' => "Δεν είναι η σειρά σου! Σειρά έχει ο " . $status['p_turn']]); return;
     }
 
-    // Ανίχνευση Μάνας (Πρώτο πούλι)
-    $startPos = ($pCode == 'W') ? 24 : 12;
-    $resStart = $mysqli->query("SELECT piece_count FROM board WHERE x=$startPos AND piece_color='$pCode'")->fetch_assoc();
-    $isMana = ($resStart && $resStart['piece_count'] == 15);
+    $diff = $from - $to;
+    if($diff < 0) $diff += 24;
 
-    $diff = ($from - $to + 24) % 24;
-    $d1 = $status['dice1']; $d2 = $status['dice2'];
-    $dieUsed = null;
-
-    // --- ΠΡΟΣΘΗΚΗ ΕΛΕΓΧΟΥ ΤΕΡΜΑΤΙΣΜΟΥ (LAP CONTROL) ---
+    // Lap Control
     $is_invalid_lap = false;
     if ($pCode == 'W') {
-        // Αν ο Άσπρος είναι στο 1-6 και πάει οπουδήποτε αλλού (wrap around)
-        if ($from >= 1 && $from <= 6 && ($to > 6 || $to < 1)) $is_invalid_lap = true;
+        if ($to > $from) $is_invalid_lap = true;
     } else {
-        // Αν ο Μαύρος είναι στο 13-18 και βγει εκτός αυτών των ορίων
-        if ($from >= 13 && $from <= 18 && ($to < 13 || $to > 18)) $is_invalid_lap = true;
+        if ($from >= 13 && $from <= 24 && $to >= 1 && $to <= 12) $is_invalid_lap = true;
     }
 
     if ($is_invalid_lap) {
@@ -149,25 +123,36 @@ function move_piece($from, $to, $playerColor) {
         echo json_encode(['error' => "Δεν μπορείτε να ξαναπεράσετε την αφετηρία!"]); return;
     }
 
-    // --- ΛΟΓΙΚΗ ΕΠΙΛΟΓΗΣ ΖΑΡΙΟΥ ---
-    if ($isMana) {
-        // Στην πρώτη κίνηση επιτρέπεται ΜΟΝΟ το άθροισμα (ή 6 αν είναι εξάρες)
-        if ($d1 == 6 && $d2 == 6 && $diff == 6) $dieUsed = 'double';
-        elseif ($d1 && $d2 && $diff == ($d1 + $d2)) $dieUsed = 'both';
+    // Μάνα
+    $startPos = ($pCode == 'W') ? 24 : 12;
+    $resStart = $mysqli->query("SELECT piece_count FROM board WHERE x=$startPos AND piece_color='$pCode'")->fetch_assoc();
+    $isMana = ($resStart && $resStart['piece_count'] == 15);
+    if ($isMana && $from != $startPos) {
+        header("HTTP/1.1 400 Bad Request");
+        echo json_encode(['error' => 'Πρέπει να κουνήσετε πρώτα τη Μάνα!']); return;
+    }
+
+    // Επιλογή ζαριού
+    $d1 = $status['dice1']; $d2 = $status['dice2'];
+    $dieUsed = null; $moves_to_subtract = 0;
+
+    if ($d1 == $d2 && $d1 !== NULL) {
+        if ($diff % $d1 == 0) {
+            $needed = $diff / $d1;
+            if ($needed <= $status['moves_left']) { $dieUsed = 'double'; $moves_to_subtract = $needed; }
+        }
     } else {
-        // Κανονικό παιχνίδι: Άθροισμα, Ζάρι 1, Ζάρι 2 ή Διπλή
-        if ($d1 && $d2 && $diff == ($d1 + $d2)) $dieUsed = 'both';
-        elseif ($d1 == $diff) $dieUsed = 'dice1';
-        elseif ($d2 == $diff) $dieUsed = 'dice2';
-        elseif ($d1 == $d2 && $d1 == $diff) $dieUsed = 'double';
+        if ($d1 && $d2 && $diff == ($d1 + $d2)) { $dieUsed = 'both'; $moves_to_subtract = 2; }
+        elseif ($d1 == $diff) { $dieUsed = 'dice1'; $moves_to_subtract = 1; }
+        elseif ($d2 == $diff) { $dieUsed = 'dice2'; $moves_to_subtract = 1; }
     }
 
     if (!$dieUsed) {
         header("HTTP/1.1 400 Bad Request");
-        echo json_encode(['error' => "Λάθος ζαριά! (Θες $diff, έχεις $d1,$d2)"]); return;
+        echo json_encode(['error' => "Λάθος ζαριά!"]); return;
     }
 
-    // Έλεγχος πιασμένης θέσης (Blocking)
+    // Blocking
     $stmt = $mysqli->prepare("SELECT piece_color, piece_count FROM board WHERE x=?");
     $stmt->bind_param("i", $to);
     $stmt->execute();
@@ -177,77 +162,78 @@ function move_piece($from, $to, $playerColor) {
         echo json_encode(['error' => 'Η θέση είναι πιασμένη!']); return;
     }
 
-    // --- ΕΚΤΕΛΕΣΗ ΚΙΝΗΣΗΣ ---
+    // Κίνηση
     $mysqli->query("UPDATE board SET piece_count = piece_count - 1 WHERE x=$from");
     $mysqli->query("UPDATE board SET piece_color = NULL WHERE x=$from AND piece_count=0");
     $mysqli->query("INSERT INTO board (x, piece_color, piece_count) VALUES ($to, '$pCode', 1) 
                     ON DUPLICATE KEY UPDATE piece_count = piece_count + 1, piece_color='$pCode'");
 
-    // --- ΔΙΑΧΕΙΡΙΣΗ ΣΕΙΡΑΣ ΚΑΙ ΖΑΡΙΩΝ ---
-    $next = ($pCode == 'W') ? 'B' : 'W';
+    $new_moves_left = $status['moves_left'] - $moves_to_subtract;
+    $next_player = ($pCode == 'W') ? 'B' : 'W';
 
-    if ($isMana) {
-        // Η πρώτη κίνηση τελειώνει ΠΑΝΤΑ τη σειρά
-        $mysqli->query("UPDATE game_status SET p_turn='$next', dice1=NULL, dice2=NULL, moves_left=0");
+    if ($dieUsed == 'double') {
+        $mysqli->query("UPDATE game_status SET moves_left = $new_moves_left");
+        if ($new_moves_left <= 2) $mysqli->query("UPDATE game_status SET dice1=NULL");
+        if ($new_moves_left <= 0) $mysqli->query("UPDATE game_status SET dice2=NULL");
     } else {
-        if ($dieUsed == 'both') {
-            $new_moves = $status['moves_left'] - 2;
-            $mysqli->query("UPDATE game_status SET dice1=NULL, dice2=NULL, moves_left=$new_moves");
-        } elseif ($dieUsed == 'dice1') {
-            $new_moves = $status['moves_left'] - 1;
-            $mysqli->query("UPDATE game_status SET dice1=NULL, moves_left=$new_moves");
-        } elseif ($dieUsed == 'dice2') {
-            $new_moves = $status['moves_left'] - 1;
-            $mysqli->query("UPDATE game_status SET dice2=NULL, moves_left=$new_moves");
-        } else { // double
-            $new_moves = $status['moves_left'] - 1;
-            $mysqli->query("UPDATE game_status SET moves_left=$new_moves");
-        }
-
-        // Έλεγχος αν πρέπει να αλλάξει η σειρά
-        $check = $mysqli->query("SELECT moves_left, dice1, dice2 FROM game_status")->fetch_assoc();
-        if ($check['moves_left'] <= 0 || ($check['dice1'] == NULL && $check['dice2'] == NULL && $status['dice1'] != $status['dice2'])) {
-            $mysqli->query("UPDATE game_status SET p_turn='$next', dice1=NULL, dice2=NULL, moves_left=0");
-        }
+        if ($dieUsed == 'both') $mysqli->query("UPDATE game_status SET dice1=NULL, dice2=NULL, moves_left=0");
+        elseif ($dieUsed == 'dice1') $mysqli->query("UPDATE game_status SET dice1=NULL, moves_left=$new_moves_left");
+        elseif ($dieUsed == 'dice2') $mysqli->query("UPDATE game_status SET dice2=NULL, moves_left=$new_moves_left");
     }
 
+    if ($new_moves_left <= 0) {
+        $mysqli->query("UPDATE game_status SET p_turn='$next_player', dice1=NULL, dice2=NULL, moves_left=0");
+    }
     $mysqli->query("UPDATE players SET last_action=NOW() WHERE piece_color='$pCode'");
 
-    // Έλεγχος αν πρέπει να αλλάξει η σειρά (Είτε επειδή τελείωσαν οι κινήσεις είτε λόγω Deadlock)
-    $check = $mysqli->query("SELECT moves_left, dice1, dice2 FROM game_status")->fetch_assoc();
-    $still_has_moves = can_player_move($pCode);
-
-    if ($check['moves_left'] <= 0 || !$still_has_moves) {
-        $next = ($pCode == 'W') ? 'B' : 'W';
-        $mysqli->query("UPDATE game_status SET p_turn='$next', dice1=NULL, dice2=NULL, moves_left=0");
-        // Αν θέλεις alert στο frontend, μπορείς να προσθέσεις ένα flag στο JSON
+    // Αυτόματο Deadlock check
+    $status_after = $mysqli->query("SELECT * FROM game_status LIMIT 1")->fetch_assoc();
+    if ($status_after['moves_left'] > 0 && !can_player_move($pCode)) {
+        $mysqli->query("UPDATE game_status SET p_turn='$next_player', dice1=NULL, dice2=NULL, moves_left=0");
     }
-
     show_status();
 }
 
-function roll_dice() {
+function can_player_move($pCode) {
     global $mysqli;
-    // Έλεγχος αν υπάρχουν ήδη ζάρια που δεν παίχτηκαν
-    $st = $mysqli->query("SELECT dice1 FROM game_status")->fetch_assoc();
-    if($st['dice1'] != NULL) { show_status(); return; }
+    $status = $mysqli->query("SELECT * FROM game_status LIMIT 1")->fetch_assoc();
+    $dice = array_filter([$status['dice1'], $status['dice2']]);
+    if (empty($dice) && $status['moves_left'] == 0) return false;
     
-    $d1 = rand(1,6); 
-    $d2 = rand(1,6);
-    
-    // Αν είναι διπλές -> 4 κινήσεις, αλλιώς 2
-    $moves = ($d1 == $d2) ? 4 : 2;
-
-    $mysqli->query("UPDATE game_status SET dice1=$d1, dice2=$d2, moves_left=$moves WHERE status='started'");
-
-    // Έλεγχος αν ο παίκτης μπορεί να κουνήσει έστω και μία φορά με τη νέα ζαριά
-    $status = $mysqli->query("SELECT p_turn FROM game_status")->fetch_assoc();
-    if (!can_player_move($status['p_turn'])) {
-        $next = ($status['p_turn'] == 'W') ? 'B' : 'W';
-        $mysqli->query("UPDATE game_status SET p_turn='$next', dice1=NULL, dice2=NULL, moves_left=0");
+    // Αν είναι διπλές και d1 υπάρχει, d2 είναι null αλλά έχουμε moves, d2 = d1
+    if($status['dice1'] == $status['dice2'] && count($dice) == 1 && $status['moves_left'] > 0) {
+        $dice[] = $status['dice1'];
     }
-    
-    show_status();
+
+    $res = $mysqli->query("SELECT x, piece_count FROM board WHERE piece_color='$pCode'");
+    $pieces = $res->fetch_all(MYSQLI_ASSOC);
+
+    $startPos = ($pCode == 'W') ? 24 : 12;
+    $resMana = $mysqli->query("SELECT piece_count FROM board WHERE x=$startPos AND piece_color='$pCode'")->fetch_assoc();
+    $hasMana = ($resMana && $resMana['piece_count'] == 15);
+
+    foreach ($pieces as $p) {
+        if ($hasMana && $p['x'] != $startPos) continue;
+        
+        foreach ($dice as $val) {
+            $from = $p['x'];
+            $to = $from - $val;
+            
+            // Μαύρα Wrap-around
+            if ($pCode == 'B' && $from <= 12 && $to < 1) $to += 24;
+
+            // Lap Control
+            $invalid = false;
+            if ($pCode == 'W') { if ($to < 1 || $to > $from) $invalid = true; }
+            else { if ($from >= 13 && $from <= 24 && $to < 13) $invalid = true; }
+            
+            if ($invalid) continue;
+
+            $dest = $mysqli->query("SELECT piece_color, piece_count FROM board WHERE x=$to")->fetch_assoc();
+            if (!$dest || $dest['piece_count'] == 0 || $dest['piece_color'] == $pCode) return true;
+        }
+    }
+    return false;
 }
 
 function surrender($loser_color) {
@@ -256,58 +242,6 @@ function surrender($loser_color) {
     $mysqli->query("UPDATE game_status SET $winner_score_col = $winner_score_col + 1, result='aborted'");
     $mysqli->query("CALL clear_game()");
     show_status();
-}
-
-
-function can_player_move($pCode) {
-    global $mysqli;
-    $status = $mysqli->query("SELECT * FROM game_status")->fetch_assoc();
-    $d1 = $status['dice1'];
-    $d2 = $status['dice2'];
-    
-    if ($d1 === NULL && $d2 === NULL) return false;
-
-    // Φέρνουμε όλα τα πούλια του παίκτη
-    $res = $mysqli->query("SELECT x, piece_count FROM board WHERE piece_color='$pCode'");
-    $pieces = $res->fetch_all(MYSQLI_ASSOC);
-
-    foreach ($pieces as $p) {
-        $from = $p['x'];
-        $isMana = ($p['piece_count'] == 15 && (($pCode == 'W' && $from == 24) || ($pCode == 'B' && $from == 12)));
-
-        // Δοκιμάζουμε τα διαθέσιμα ζάρια
-        $dice_to_test = [];
-        if ($isMana) {
-            if ($d1 && $d2) $dice_to_test[] = $d1 + $d2; // Στη μάνα μόνο το άθροισμα
-            if ($d1 == 6 && $d2 == 6) $dice_to_test[] = 6;
-        } else {
-            if ($d1) $dice_to_test[] = $d1;
-            if ($d2) $dice_to_test[] = $d2;
-            if ($d1 && $d2) $dice_to_test[] = $d1 + $d2;
-        }
-
-        foreach ($dice_to_test as $steps) {
-            // Υπολογισμός στόχου
-            $to = $from;
-            for ($i = 0; $i < $steps; $i++) {
-                $to--; if ($to < 1) $to = 24;
-            }
-
-            // Έλεγχος Lap Control (για να μην χαλάσουμε τον κανόνα τερματισμού)
-            $invalid = false;
-            if ($pCode == 'W' && $from >= 1 && $from <= 6 && ($to > 6 || $to < 1)) $invalid = true;
-            if ($pCode == 'B' && $from >= 13 && $from <= 18 && ($to < 13 || $to > 18)) $invalid = true;
-            
-            if ($invalid) continue;
-
-            // Έλεγχος αν η θέση είναι πιασμένη
-            $dest = $mysqli->query("SELECT piece_color, piece_count FROM board WHERE x=$to")->fetch_assoc();
-            if (!$dest || $dest['piece_count'] == 0 || $dest['piece_color'] == $pCode) {
-                return true; // Βρέθηκε έστω και ΜΙΑ νόμιμη κίνηση!
-            }
-        }
-    }
-    return false; // Καμία νόμιμη κίνηση
 }
 
 function can_collect($color) {
