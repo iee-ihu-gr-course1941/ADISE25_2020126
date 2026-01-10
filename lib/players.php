@@ -53,7 +53,7 @@ function show_user($b) {
         header('Content-type: application/json');
         print json_encode($res->fetch_all(MYSQLI_ASSOC), JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE);
     } catch(Exception $e) {
-        require_once('/logger.php');
+        require_once('logger.php');
         app_log('handle status: ' . $e);
     }
 }
@@ -74,7 +74,6 @@ function show_users() {
 
 function set_user($b, $input) {
     try {
-
         if(!isset($input['username']) || $input['username']=='') {
             header("HTTP/1.1 400 Bad Request");
             print json_encode(['errormesg'=>"No username given."]);
@@ -147,8 +146,11 @@ function set_user($b, $input) {
         header('Content-type: application/json');
         print json_encode($res->fetch_all(MYSQLI_ASSOC), JSON_PRETTY_PRINT);
     } catch(Exception $e) {
-        require_once('/logger.php');
-        app_log('handle status: ' . $e);
+        require_once('logger.php');
+        app_log('handle status error: ' . $e->getMessage(), 'ERROR');
+        http_response_code(500);
+        echo json_encode(['error' => 'Internal Server Error']);
+        exit;
     }
 }
 
