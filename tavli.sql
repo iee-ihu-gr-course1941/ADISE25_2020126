@@ -64,19 +64,16 @@ DELIMITER //
 DROP PROCEDURE IF EXISTS clean_board//
 CREATE PROCEDURE clean_board()
 BEGIN
-    -- Καθαρισμός
+    -- Καθαρισμός ταμπλό
     UPDATE board SET piece_count = 0, piece_color = null;
 
-    -- ΣΤΗΣΙΜΟ ΦΕΥΓΑ
-    -- Άσπρα (W): 15 πούλια στη θέση 24
+    -- Στήσιμο για ΦΕΥΓΑ
     UPDATE board SET piece_count = 15, piece_color = 'W' WHERE x = 24;
-    
-    -- Μαύρα (B): 15 πούλια στη θέση 12
     UPDATE board SET piece_count = 15, piece_color = 'B' WHERE x = 12;
     
-    -- Ενημέρωση Status: Το παιχνίδι ξεκινάει, παίζει ο Άσπρος
+    -- Ενημέρωση Status
     UPDATE game_status 
-    SET status='started', p_turn='W', dice1=NULL, dice2=NULL, result=NULL;
+    SET status='not active', p_turn=NULL, dice1=NULL, dice2=NULL, result=NULL, moves_left=0;
 END //
 
 -- clear_game: Μηδενίζει τα πάντα (Reset)
