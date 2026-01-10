@@ -28,7 +28,7 @@ function handle_status($method, $input=null) {
                 roll_dice();
             }
         } catch (Exception $e) {
-            require_once('/logger.php');
+            require_once('logger.php');
             app_log('handle status: ' . $e);
         }
     }
@@ -42,6 +42,12 @@ function show_status() {
     }
 }
 
+
+function reset_status() {
+    global $mysqli;
+    $mysqli->query("UPDATE game_status SET status='not active', p_turn='W', dice1=NULL, dice2=NULL, result=NULL, moves_left=0");
+}
+
 function update_game_status() {
     global $mysqli;
     $res = $mysqli->query("SELECT status FROM game_status LIMIT 1");
@@ -50,8 +56,9 @@ function update_game_status() {
     $sql_players = "SELECT count(*) as c FROM players WHERE username IS NOT NULL AND last_action > (NOW() - INTERVAL 5 MINUTE)";
     $active_players = $mysqli->query($sql_players)->fetch_assoc()['c'];
 
+    // ΑΠΛΗ ΛΟΓΙΚΗ: 2 παίκτες = Ξεκινάμε με Άσπρα
     if ($status == 'not active' && $active_players == 2) {
-        $mysqli->query("UPDATE game_status SET status='first_roll', last_change=NOW()");
+        $mysqli->query("UPDATE game_status SET status='started', p_turn='W', moves_left=0, last_change=NOW()");
     }
     elseif ($status == 'started') {
         $sql_timeout = "SELECT piece_color FROM players WHERE last_action < (NOW() - INTERVAL 5 MINUTE) AND username IS NOT NULL";
@@ -88,13 +95,25 @@ function handle_roll_first() {
 function roll_dice() {
     global $mysqli;
     $st = $mysqli->query("SELECT * FROM game_status LIMIT 1")->fetch_assoc();
-    if($st['moves_left'] > 0) { show_status(); return; }
     
-    $d1 = rand(1,6); $d2 = rand(1,6);
-    $moves = ($d1 == $d2) ? 4 : 2;
+    // Έλεγχος αν είναι η ΠΡΩΤΗ ζαριά του παιχνιδιού (όλα τα πούλια στις θέσεις τους)
+    $res_white = $mysqli->query("SELECT piece_count FROM board WHERE x=24 AND piece_color='W'")->fetch_assoc();
+    $res_black = $mysqli->query("SELECT piece_count FROM board WHERE x=12 AND piece_color='B'")->fetch_assoc();
+    
+    $is_first_roll = ($res_white['piece_count'] == 15 && $res_black['piece_count'] == 15);
+
+    $d1 = rand(1,6); 
+    $d2 = rand(1,6);
+    
+    if ($is_first_roll) {
+        $moves = 1; // Μόνο μία κίνηση στην πρώτη ζαριά
+    } else {
+        $moves = ($d1 == $d2) ? 4 : 2;
+    }
+
     $mysqli->query("UPDATE game_status SET dice1=$d1, dice2=$d2, moves_left=$moves WHERE status='started'");
     
-    // Επανέλεγχος αν ο παίκτης μπορεί να κουνήσει
+    // Deadlock check
     if (!can_player_move($st['p_turn'])) {
         $next = ($st['p_turn'] == 'W') ? 'B' : 'W';
         $mysqli->query("UPDATE game_status SET p_turn='$next', dice1=NULL, dice2=NULL, moves_left=0");
@@ -137,24 +156,55 @@ function move_piece($from, $to, $playerColor) {
         echo json_encode(['error' => 'Πρέπει να κουνήσετε πρώτα τη Μάνα!']); return;
     }
 
-    // Επιλογή ζαριού
-    $d1 = $status['dice1']; $d2 = $status['dice2'];
-    $dieUsed = null; $moves_to_subtract = 0;
+    // --- ΛΟΓΙΚΗ ΕΠΙΛΟΓΗΣ ΖΑΡΙΟΥ (ΕΙΔΙΚΗ ΓΙΑ ΠΡΩΤΗ ΚΙΝΗΣΗ) ---
+    $d1 = $status['dice1']; 
+    $d2 = $status['dice2'];
+    $dieUsed = null;
+    $moves_to_subtract = 0;
 
-    if ($d1 == $d2 && $d1 !== NULL) {
+    // ΕΛΕΓΧΟΣ: Είναι η πρώτη κίνηση του παίκτη; (15 πούλια στη Μάνα και moves_left=1)
+    if ($isMana && $status['moves_left'] == 1) {
+        if ($d1 == 6 && $d2 == 6) {
+            // Αν είναι 6άρες, πρέπει η απόσταση να είναι ακριβώς 6
+            if ($diff == 6) {
+                $dieUsed = 'double';
+                $moves_to_subtract = 1;
+            }
+        } else {
+            // Σε κάθε άλλη περίπτωση, πρέπει η απόσταση να είναι το άθροισμα
+            if ($diff == ($d1 + $d2)) {
+                $dieUsed = 'both';
+                $moves_to_subtract = 1;
+            }
+        }
+    } 
+    // ΚΑΝΟΝΙΚΟ ΠΑΙΧΝΙΔΙ (μετά την πρώτη κίνηση)
+    else if ($d1 == $d2 && $d1 !== NULL) {
         if ($diff % $d1 == 0) {
             $needed = $diff / $d1;
-            if ($needed <= $status['moves_left']) { $dieUsed = 'double'; $moves_to_subtract = $needed; }
+            if ($needed <= $status['moves_left']) {
+                $dieUsed = 'double';
+                $moves_to_subtract = $needed;
+            }
         }
     } else {
-        if ($d1 && $d2 && $diff == ($d1 + $d2)) { $dieUsed = 'both'; $moves_to_subtract = 2; }
-        elseif ($d1 == $diff) { $dieUsed = 'dice1'; $moves_to_subtract = 1; }
-        elseif ($d2 == $diff) { $dieUsed = 'dice2'; $moves_to_subtract = 1; }
+        if ($d1 && $d2 && $diff == ($d1 + $d2)) { 
+            $dieUsed = 'both'; 
+            $moves_to_subtract = 2; 
+        } elseif ($d1 == $diff) { 
+            $dieUsed = 'dice1'; 
+            $moves_to_subtract = 1; 
+        } elseif ($d2 == $diff) { 
+            $dieUsed = 'dice2'; 
+            $moves_to_subtract = 1; 
+        }
     }
 
     if (!$dieUsed) {
         header("HTTP/1.1 400 Bad Request");
-        echo json_encode(['error' => "Λάθος ζαριά!"]); return;
+        // Πιο αναλυτικό μήνυμα για να ξέρεις τι φταίει
+        $targetMsg = ($isMana && $status['moves_left'] == 1) ? (($d1==6 && $d2==6) ? "6" : ($d1+$d2)) : "έγκυρη ζαριά";
+        echo json_encode(['error' => "Στην πρώτη κίνηση πρέπει να πάτε στη θέση $targetMsg!"]); return;
     }
 
     // Blocking
