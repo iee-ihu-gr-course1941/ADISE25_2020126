@@ -8,6 +8,7 @@
     <link href="bootstrap/bootstrap.min.css" rel="stylesheet">
     <link href="css/style.css" rel="stylesheet">
     <script src="bootstrap/jquery-3.2.1.min.js"></script>
+    <script src="bootstrap/popper.min.js"></script> 
     <script src="bootstrap/bootstrap.min.js"></script>
 
     <style>
