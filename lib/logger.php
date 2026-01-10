@@ -2,7 +2,7 @@
 
 function app_log(string $message, string $level = 'INFO'): void
 {
-    $logFile = __DIR__ . '../logs/app.log';
+    $logFile = __DIR__ . '/../logs/app.log';
 
     $date = date('Y-m-d H:i:s');
     $line = "[$date] [$level] $message" . PHP_EOL;
