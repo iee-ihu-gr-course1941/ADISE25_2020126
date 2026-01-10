@@ -1,6 +1,6 @@
 <?php
 // lib/dbconnect.php
-$host = 'localhost';
+$host = '127.0.0.1';
 $db = 'tavli';
 require_once "db_upass.php";
 
@@ -13,7 +13,7 @@ if(gethostname() == 'users.iee.ihu.gr') {
     $mysqli = new mysqli($host, $user, $pass, $db, null, '/home/student/iee/2020/iee2020126/mysql/run/mysql.sock');
 } else {
     // Σύνδεση Τοπικά (XAMPP)
-    $mysqli = new mysqli($host, $user, $pass, $db, port:3307);
+    $mysqli = new mysqli($host, $user, $pass, $db, 3307);
 }
 
 // Αν υπάρχει λάθος, το εμφανίζουμε (για να ξέρουμε τι φταίει)
