@@ -141,21 +141,25 @@ $is_hotseat_js = (isset($_SESSION['game_mode']) && $_SESSION['game_mode'] === 'h
         </div>
 
         <div id="controls">
+            <!-- Το Ρολόι -->
+            <div id="timer-container" style="position: fixed; bottom: 20px; left: 20px; background: rgba(0,0,0,0.7); padding: 15px; border-radius: 10px; border: 2px solid #f1c40f;">
+                <div style="font-size: 0.8rem; color: #bdc3c7;">ΧΡΟΝΟΣ ΣΕΙΡΑΣ</div>
+                <div id="timer-display" style="font-size: 2rem; font-weight: bold; color: #f1c40f; font-family: monospace;">02:00</div>
+            </div>
+
             <div id="dice-display" style="display:none; margin-bottom: 15px;">
                 <div class="dice-box" id="d1">-</div>
                 <div class="dice-box" id="d2">-</div>
             </div>
 
-            <div id="start-message" style="display:none; font-size: 1.5rem; font-weight:bold; color: #f1c40f; margin: 10px 0;">
-            </div>
-
             <button id="btn-start-game" onclick="startGame()" class="btn btn-success btn-lg">Έναρξη Παιχνιδιού</button>
-            <button id="btn-roll-first" onclick="rollFirst()" class="btn btn-primary btn-lg" style="display:none;">🎲 Ποιος παίζει πρώτος;</button>
             <button id="btn-roll" onclick="rollDice()" class="btn btn-warning btn-lg" style="display:none;">Ρίξε τα Ζάρια!</button>
 
             <div id="game-controls" style="display:none; margin-top:15px;">
+                <button id="btn-pass" onclick="passTurn()" class="btn btn-danger">Πάσο</button>
                 <button onclick="resetGame()" class="btn btn-primary">Επανεκκίνηση</button> 
-                <button onclick="updateAll()" class="btn btn-warning">Ανανέωση</button>
+                <!-- Το UpdateAll παραμένει κρυφό αλλά χρήσιμο για debug αν χρειαστεί -->
+                <button onclick="updateAll()" id="btn-refresh" style="display:none;">Ανανέωση</button>
             </div>
         </div>
 
