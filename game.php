@@ -135,6 +135,11 @@ $is_hotseat_js = (isset($_SESSION['game_mode']) && $_SESSION['game_mode'] === 'h
             </div>
         </div>
 
+        <div class="off-board-containers">
+            <div id="off-b" class="off-zone"></div>
+            <div id="off-w" class="off-zone"></div>
+        </div>
+
         <div class="player-label bottom-left">
             <span id="p-name-w"><?php echo $_SESSION['player_white']; ?></span> (Άσπρα)
             <span id="turn-label-w" class="turn-active" style="display:none;">Παίζει τώρα</span>
