@@ -87,7 +87,7 @@ body {
 .black-piece { background-color: #222; }
 #controls { margin-top: 15px; text-align: center; }
 
-/* ΤΟ ΚΟΥΜΠΙ ΠΟΥ ΣΟΥ ΑΡΕΣΕ */
+
 #btn-roll {
     padding: 10px 20px;
     font-size: 1.1rem;
@@ -110,8 +110,52 @@ body {
     border: 2px dashed #2ecc71; cursor: pointer;
     animation: pulse-green 1.5s infinite;
 }
+
+.game-wrapper {
+    position: relative;
+    width: 600px;
+    margin: 40px auto;
+}
+
+.off-zone {
+    position: absolute;
+    top: 0;
+    width: 50px;
+    height: 430px; /* Ύψος όσο το ταμπλό */
+    background: rgba(0, 0, 0, 0.15);
+    border: 2px dashed rgba(255, 255, 255, 0.2);
+    border-radius: 8px;
+    display: flex;
+    flex-direction: column-reverse; /* Στοίβαξη από κάτω προς τα πάνω */
+    align-items: center;
+    padding: 5px;
+    gap: 1px; /* Πολύ μικρό κενό ανάμεσα στα πούλια */
+    box-sizing: border-box;
+}
+
+.off-left { left: -65px; }
+.off-right { right: -105px; }
+
+/* Τα πούλια μέσα στις θήκες εξόδου */
+.off-zone .piece {
+    width: 35px;
+    height: 15px; /* Πιο πλακέ για να χωράνε και τα 15 */
+    border-radius: 4px; /* Πιο τετράγωνα για στυλ στοίβας */
+    margin: 0;
+    box-shadow: 1px 1px 3px rgba(0,0,0,0.3);
+}
+
+/* Πρασίνισμα όταν είναι έτοιμο για μάζεμα */
+.off-zone.possible-move {
+    background: rgba(46, 204, 113, 0.4) !important;
+    border: 2px solid #2ecc71 !important;
+    cursor: pointer;
+    animation: pulse-green 1.5s infinite;
+}
+
 @keyframes pulse-green {
     0% { background-color: rgba(46, 204, 113, 0.4); }
     50% { background-color: rgba(46, 204, 113, 0.7); }
     100% { background-color: rgba(46, 204, 113, 0.4); }
 }
+
