@@ -73,7 +73,7 @@ BEGIN
     
     -- Ενημέρωση Status
     UPDATE game_status 
-    SET status='not active', p_turn=NULL, dice1=NULL, dice2=NULL, result=NULL, moves_left=0;
+    SET status='not active', p_turn=NULL, dice1=NULL, dice2=NULL, result=NULL, moves_left=0, w_off=0, b_off=0;
 END //
 
 -- clear_game: Μηδενίζει τα πάντα (Reset)
