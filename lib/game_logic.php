@@ -100,12 +100,11 @@ function is_pos_blocked($pos, $myCode) {
 function calculate_target($start, $steps, $color) {
     $t = $start - $steps;
     if ($color == 'B') {
-        // Ο Μαύρος κάνει wrap-around (+24) ΜΟΝΟ αν ξεκινά από το πρώτο μισό (12 έως 1)
+        // Ο Μαύρος κάνει wrap-around (+24) ΜΟΝΟ αν ξεκινά από το κάτω μισό (12 έως 1)
         if ($start <= 12 && $t < 1) { 
             $t += 24; 
         } 
-        // Αν είναι ήδη στο δεύτερο μισό (24 έως 13), δεν κάνει wrap. 
-        // Το t θα μείνει κάτω από 13, οπότε η move_piece θα το θεωρήσει άκυρο (γιατί είναι έξοδος).
+        // Αν είναι ήδη στο πάνω (24-13), το t παραμένει < 13 (που σημαίνει έξοδος)
     }
     return $t;
 }
@@ -120,24 +119,29 @@ function move_piece($from, $to, $playerColor) {
     $d1 = $status['dice1']; $d2 = $status['dice2'];
     $dieUsed = null; $moves_to_subtract = 0;
 
-    // --- ΑΥΣΤΗΡΟ LAP CONTROL (ΤΟ ΦΡΑΓΜΑ) ---
+    // --- ΟΡΙΣΤΙΚΟ LAP CONTROL (ΤΟ ΦΡΑΓΜΑ) ---
     $invalid = false;
     if ($pCode == 'W') { 
         if ($to >= $from || $to < 1) $invalid = true; 
     } else { 
-        // Μαύρα:
+        // Μαύρα: 12 -> 1 (Κάτω) και μετά 24 -> 13 (Πάνω)
         if ($from <= 12) { 
-            // Στο πρώτο μισό (12-1) μπορεί να πάει μπροστά ή να κάνει wrap στο 24-13
-            if ($to > 12 && $to <= $from) $invalid = true; 
+            // Αν είναι στην κάτω σειρά (12-1):
+            // Μπορεί να πάει μπροστά στην ίδια σειρά (to < from)
+            // Ή να κάνει wrap στην πάνω σειρά (to > 12)
+            if ($to <= 12 && $to >= $from) $invalid = true; 
         } else { 
-            // Στο δεύτερο μισό (24-13) ΔΕΝ μπορεί να πέσει κάτω από το 13 (κύκλος)
+            // Αν είναι στην πάνω σειρά (24-13):
+            // ΠΡΕΠΕΙ να μείνει στην πάνω σειρά (to >= 13) 
+            // και να πάει μπροστά (to < from)
             if ($to < 13 || $to >= $from) $invalid = true; 
         }
     }
     if ($invalid) { header("HTTP/1.1 400 Bad Request"); echo json_encode(['error' => "Δεν μπορείτε να ξαναπεράσετε την αφετηρία!"]); return; }
 
-    // --- BLOCKING CHECK ---
+    // Helper για blocking
     $is_blocked = function($pos) use ($mysqli, $pCode) {
+        if ($pos < 1 || $pos > 24) return false;
         $res = $mysqli->query("SELECT piece_color, piece_count FROM board WHERE x=$pos")->fetch_assoc();
         return ($res && $res['piece_count'] > 0 && $res['piece_color'] != $pCode);
     };
@@ -151,11 +155,11 @@ function move_piece($from, $to, $playerColor) {
 
     // Λογική Ζαριών
     if ($resStart && $resStart['piece_count'] == 15 && $status['moves_left'] == 1) {
-        $needed = ($d1 == 6 && $d2 == 6) ? 6 : ($d1 + $d2);
-        if ($dist == $needed) {
-            if ($needed > 6) {
-                $stop1 = calculate_target($from, $d1, $pCode); $stop2 = calculate_target($from, $d2, $pCode);
-                if ($is_blocked($stop1) && $is_blocked($stop2)) { header("HTTP/1.1 400 Bad Request"); echo json_encode(['error' => "Ενδιάμεσες στάσεις πιασμένες!"]); return; }
+        $val = ($d1 == 6 && $d2 == 6) ? 6 : ($d1 + $d2);
+        if ($dist == $val) {
+            if ($val > 6) {
+                $s1 = calculate_target($from, $d1, $pCode); $s2 = calculate_target($from, $d2, $pCode);
+                if ($is_blocked($s1) && $is_blocked($s2)) { header("HTTP/1.1 400 Bad Request"); echo json_encode(['error' => "Ενδιάμεσες στάσεις πιασμένες!"]); return; }
             }
             $dieUsed = 'both'; $moves_to_subtract = 1;
         }
@@ -165,7 +169,7 @@ function move_piece($from, $to, $playerColor) {
             $steps = $dist / $d1;
             if ($steps <= $status['moves_left']) {
                 for ($i = 1; $i <= $steps; $i++) {
-                    if ($is_blocked(calculate_target($from, $i * $d1, $pCode))) { header("HTTP/1.1 400 Bad Request"); echo json_encode(['error' => "Εμπόδιο στη διαδρομή!"]); return; }
+                    if ($is_blocked(calculate_target($from, $i * $d1, $pCode), $pCode)) { header("HTTP/1.1 400 Bad Request"); echo json_encode(['error' => "Εμπόδιο στη διαδρομή!"]); return; }
                 }
                 $dieUsed = 'double'; $moves_to_subtract = $steps;
             }
@@ -174,26 +178,31 @@ function move_piece($from, $to, $playerColor) {
     else {
         if ($d1 && $d2 && $dist == ($d1 + $d2)) {
             $stop1 = calculate_target($from, $d1, $pCode); $stop2 = calculate_target($from, $d2, $pCode);
-            if ($is_blocked($stop1) && $is_blocked($stop2)) { header("HTTP/1.1 400 Bad Request"); echo json_encode(['error' => "Ενδιάμεσες στάσεις πιασμένες!"]); return; }
+            if ($is_blocked($stop1, $pCode) && $is_blocked($stop2, $pCode)) { header("HTTP/1.1 400 Bad Request"); echo json_encode(['error' => "Ενδιάμεσες στάσεις πιασμένες!"]); return; }
             $dieUsed = 'both'; $moves_to_subtract = 2;
         }
         elseif ($d1 == $dist) { $dieUsed = 'dice1'; $moves_to_subtract = 1; }
         elseif ($d2 == $dist) { $dieUsed = 'dice2'; $moves_to_subtract = 1; }
     }
 
-    if (!$dieUsed || $is_blocked($to)) { header("HTTP/1.1 400 Bad Request"); echo json_encode(['error' => "Μη έγκυρη κίνηση!"]); return; }
+    if (!$dieUsed || $is_blocked($to, $pCode)) { header("HTTP/1.1 400 Bad Request"); echo json_encode(['error' => "Μη έγκυρη κίνηση!"]); return; }
 
-    // Εκτέλεση
     $mysqli->query("UPDATE board SET piece_count = piece_count - 1 WHERE x=$from"); 
     $mysqli->query("UPDATE board SET piece_color = NULL WHERE x=$from AND piece_count=0");
     $mysqli->query("INSERT INTO board (x, piece_color, piece_count) VALUES ($to, '$pCode', 1) ON DUPLICATE KEY UPDATE piece_count = piece_count + 1, piece_color='$pCode'");
-
     $new_moves = $status['moves_left'] - $moves_to_subtract;
     if ($dieUsed == 'double') { $mysqli->query("UPDATE game_status SET moves_left = $new_moves"); if ($new_moves <= 0) $mysqli->query("UPDATE game_status SET dice1=NULL, dice2=NULL"); }
-    else { if ($dieUsed == 'both' || $new_moves <= 0) $mysqli->query("UPDATE game_status SET dice1=NULL, dice2=NULL, moves_left=0"); elseif ($dieUsed == 'dice1') $mysqli->query("UPDATE game_status SET dice1=NULL, moves_left=$new_moves"); elseif ($dieUsed == 'dice2') $mysqli->query("UPDATE game_status SET dice2=NULL, moves_left=$new_moves"); }
+    else { if ($dieUsed == 'both' || $new_moves <= 0) $mysqli->query("UPDATE game_status SET dice1=NULL, dice2=NULL, moves_left=0"); elseif ($dieUsed == 'dice1') $mysqli->query("UPDATE game_status SET dice1=NULL, moves_left=$new_moves"); elseif ($dieUsed == 'dice2') $mysqli->query("UPDATE game_status SET dice1=NULL, moves_left=$new_moves"); }
     if ($new_moves <= 0) { $next = ($pCode == 'W') ? 'B' : 'W'; $mysqli->query("UPDATE game_status SET p_turn='$next', moves_left=0, dice1=NULL, dice2=NULL"); }
     $mysqli->query("UPDATE players SET last_action=NOW() WHERE piece_color='$pCode'");
     show_status();
+}
+
+// Βοηθητική συνάρτηση για να μην μπερδεύεται ο έλεγχος Μάνας
+function is_mana_first_move($mysqli, $pCode, $status) {
+    $startPos = ($pCode == 'W') ? 24 : 12;
+    $res = $mysqli->query("SELECT piece_count FROM board WHERE x=$startPos AND piece_color='$pCode'")->fetch_assoc();
+    return ($res && $res['piece_count'] == 15 && $status['moves_left'] == 1);
 }
 
 function handle_roll_first() {
