@@ -100,7 +100,7 @@ async function refreshBoard() {
         const res = await fetch('tavli.php/board/'), data = await res.json(); boardState = data;
         const statusRes = await fetch('tavli.php/status/'), statusData = await statusRes.json();
         
-        // --- ΑΜΕΣΟΣ ΕΛΕΓΧΟΣ ΕΤΟΙΜΟΤΗΤΑΣ ΜΑΖΕΜΑΤΟΣ ---
+        // --- ΑΜΕΣΟΣ ΕΛΕΓΧΟΣ ΕΤΟΙΜΟΤΗΤΑΣ ΠΡΙΝ ΤΗ ΣΧΕΔΙΑΣΗ ---
         let wH = 0, bH = 0; 
         data.forEach(p => { 
             let count = parseInt(p.piece_count);
@@ -108,11 +108,10 @@ async function refreshBoard() {
             if (p.piece_color === 'B' && p.x >= 13 && p.x <= 18 && count > 0) bH += count; 
         });
 
-        // Υπολογισμός αν μπορεί να μαζέψει (canCollect) - Εδώ συμπεριλαμβάνουμε και τα ήδη μαζεμένα
-        // (15 πούλια συνολικά: ταμπλό + off)
         const canCollectW = (wH + statusData.w_off === 15 && wH > 0);
         const canCollectB = (bH + statusData.b_off === 15 && bH > 0);
 
+        // Το alert πετάγεται αμέσως μόλις η βάση δείξει 15 πούλια (ταμπλό + έξω)
         if (canCollectW && !whiteReadyAlerted) { alert("Ο παίκτης (Άσπρα) είναι έτοιμος να μαζέψει τα πούλια!"); whiteReadyAlerted = true; } 
         else if (!canCollectW) whiteReadyAlerted = false;
         
@@ -125,16 +124,14 @@ async function refreshBoard() {
             const tri = document.getElementById('p' + pos.x);
             if(tri && parseInt(pos.piece_count) > 0) {
                 for(let i=0; i<parseInt(pos.piece_count); i++) {
-                    const pc = document.createElement('div');
-                    pc.className = 'piece ' + (pos.piece_color === 'W' ? 'white-piece' : 'black-piece');
+                    const pc = document.createElement('div'); pc.className = 'piece ' + (pos.piece_color === 'W' ? 'white-piece' : 'black-piece');
                     if (selectedPieceId === parseInt(pos.x) && i === parseInt(pos.piece_count) - 1) pc.classList.add('selected-piece');
                     const isMine = (pos.piece_color === 'W' && myColor === 'white') || (pos.piece_color === 'B' && myColor === 'black');
                     if (isMine && isMyTurn) {
                         pc.style.cursor = 'pointer';
                         pc.onclick = (e) => {
                             e.stopPropagation();
-                            // Επιλογή: Μάζεμα ή Κίνηση
-                            const ready = (myColor === 'white' ? wH + statusData.w_off === 15 : bH + statusData.b_off === 15);
+                            const ready = (myColor === 'white' ? canCollectW : canCollectB);
                             const dist = (myColor === 'white') ? parseInt(pos.x) : (parseInt(pos.x) - 12);
                             if (ready && (currentDice.d1 >= dist || currentDice.d2 >= dist)) handleCollectClick(pos.x);
                             else selectPiece(pos.x);
@@ -153,14 +150,17 @@ async function refreshBoard() {
     } catch (e) { console.error(e); }
 }
 
-
 function showSuggestions(startPos, canCollect) {
-    const d1 = parseInt(currentDice.d1) || 0, d2 = parseInt(currentDice.d2) || 0, targets = new Set();
-    const myCode = (myColor === 'white' ? 'W' : 'B'), startPosInt = parseInt(startPos);
-    
+    const d1 = parseInt(currentDice.d1) || 0;
+    const d2 = parseInt(currentDice.d2) || 0;
+    const targets = new Set();
+    const myCode = (myColor === 'white' ? 'W' : 'B');
+    const startPosInt = parseInt(startPos);
+
+    // Βοηθητική: Υπολογίζει τον στόχο με wrap-around ΜΟΝΟ για Μαύρα που ξεκινάνε από το 12-1
     const getTarget = (s, val) => { 
         let t = s - val; 
-        if (myColor === 'black' && s <= 12 && t < 1) t += 24; // Wrap-around ΜΟΝΟ για το 1ο μισό
+        if (myColor === 'black' && s <= 12 && t < 1) t += 24; 
         return t; 
     };
     
@@ -171,18 +171,35 @@ function showSuggestions(startPos, canCollect) {
 
     const sq = boardState.find(s => parseInt(s.x) === startPosInt), isMana = (sq && parseInt(sq.piece_count) === 15);
 
+    // Υπολογισμός πιθανών κινήσεων (Πρώτη κίνηση, Διπλές, Απλές)
     if (isMana && currentMovesLeft === 1) {
         let val = (d1 === 6 && d2 === 6) ? 6 : (d1 + d2);
         targets.add(getTarget(startPosInt, val));
     } else if (d1 > 0 && d1 === d2) {
-        for (let i = 1; i <= currentMovesLeft; i++) { let t = getTarget(startPosInt, i * d1); if (isBlocked(t)) break; targets.add(t); }
+        for (let i = 1; i <= currentMovesLeft; i++) { 
+            let t = getTarget(startPosInt, i * d1); 
+            if (isBlocked(t)) break; 
+            targets.add(t); 
+        }
     } else {
-        if (d1 > 0) { let t1 = getTarget(startPosInt, d1); if (!isBlocked(t1)) { targets.add(t1); if (d2 > 0) { let ts = getTarget(startPosInt, d1 + d2); if (!isBlocked(ts)) targets.add(ts); } } }
-        if (d2 > 0) { let t2 = getTarget(startPosInt, d2); if (!isBlocked(t2)) { targets.add(t2); if (d1 > 0) { let ts = getTarget(startPosInt, d1 + d2); if (!isBlocked(ts)) targets.add(ts); } } }
+        if (d1 > 0) { 
+            let t1 = getTarget(startPosInt, d1); 
+            if (!isBlocked(t1)) {
+                targets.add(t1);
+                if (d2 > 0) { let ts = getTarget(startPosInt, d1 + d2); if (!isBlocked(ts)) targets.add(ts); }
+            }
+        }
+        if (d2 > 0) { 
+            let t2 = getTarget(startPosInt, d2); 
+            if (!isBlocked(t2)) {
+                targets.add(t2);
+                if (d1 > 0) { let ts = getTarget(startPosInt, d1 + d2); if (!isBlocked(ts)) targets.add(ts); }
+            }
+        }
     }
 
     targets.forEach(t => {
-        // Διαχωρισμός Εξόδου (Μάζεμα) από Κίνηση
+        // --- ΕΛΕΓΧΟΣ ΕΞΟΔΟΥ VS ΚΙΝΗΣΗΣ ---
         let isExit = (myColor === 'white' && t < 1) || (myColor === 'black' && startPosInt >= 13 && t < 13);
         
         if (isExit) {
@@ -194,11 +211,16 @@ function showSuggestions(startPos, canCollect) {
                 }
             }
         } else if (t >= 1 && t <= 24 && !isBlocked(t)) {
-            // Φραγμός κύκλου: Λευκός δεν πάει πάνω από start, Μαύρος (αν είναι 24-13) δεν πάει 1-12
+            // --- ΤΟ ΦΡΑΓΜΑ ΓΙΑ ΤΑ ΜΑΥΡΑ ---
+            // Αν είναι στην πάνω σειρά (13-24), απαγορεύεται να δείξει στόχο στην κάτω (1-12)
+            if (myColor === 'black' && startPosInt >= 13 && t <= 12) return;
+            // Αν είναι στην κάτω σειρά (1-12), απαγορεύεται να πάει "πίσω" (προς το 12)
+            if (myColor === 'black' && startPosInt <= 12 && t > startPosInt && t <= 12) return;
+            // Φράγμα για τα Άσπρα (να μην πάνε πίσω)
             if (myColor === 'white' && t >= startPosInt) return;
-            if (myColor === 'black' && startPosInt >= 13 && t < 13) return;
 
-            const el = document.getElementById('p' + t); if (el) { el.classList.add('possible-move'); el.onclick = () => handlePointClick(t); }
+            const el = document.getElementById('p' + t); 
+            if (el) { el.classList.add('possible-move'); el.onclick = () => handlePointClick(t); }
         }
     });
 }
