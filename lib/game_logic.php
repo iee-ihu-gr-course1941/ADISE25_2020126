@@ -193,6 +193,13 @@ function move_piece($from, $to, $playerColor) {
     show_status();
 }
 
+// Βοηθητική συνάρτηση για να μην μπερδεύεται ο έλεγχος Μάνας
+function is_mana_first_move($mysqli, $pCode, $status) {
+    $startPos = ($pCode == 'W') ? 24 : 12;
+    $res = $mysqli->query("SELECT piece_count FROM board WHERE x=$startPos AND piece_color='$pCode'")->fetch_assoc();
+    return ($res && $res['piece_count'] == 15 && $status['moves_left'] == 1);
+}
+
 function handle_roll_first() {
     global $mysqli; 
     $res = $mysqli->query("SELECT dice1, dice2 FROM game_status LIMIT 1")->fetch_assoc(); 

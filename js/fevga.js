@@ -19,6 +19,7 @@ async function updateAll() {
 }
 
 async function checkGameStatus() {
+    if (isAnimating) return;
     try {
         const response = await fetch('tavli.php/status/');
         const status = await response.json();
@@ -144,8 +145,7 @@ async function refreshBoard() {
             const tri = document.getElementById('p' + pos.x);
             if(tri && parseInt(pos.piece_count) > 0) {
                 for(let i=0; i<parseInt(pos.piece_count); i++) {
-                    const pc = document.createElement('div');
-                    pc.className = 'piece ' + (pos.piece_color === 'W' ? 'white-piece' : 'black-piece');
+                    const pc = document.createElement('div'); pc.className = 'piece ' + (pos.piece_color === 'W' ? 'white-piece' : 'black-piece');
                     if (selectedPieceId === parseInt(pos.x) && i === parseInt(pos.piece_count) - 1) pc.classList.add('selected-piece');
                     if ((pos.piece_color === 'W' && myColor === 'white') || (pos.piece_color === 'B' && myColor === 'black')) {
                         pc.style.cursor = isMyTurn ? 'pointer' : 'default';
