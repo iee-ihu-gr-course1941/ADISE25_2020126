@@ -3,13 +3,14 @@
 require_once "lib/dbconnect.php";
 session_start();
 
+// Έλεγχος αν ο χρήστης έχει περάσει από τη διαδικασία Login
 if (!isset($_SESSION['player1_name']) || !isset($_SESSION['player2_name'])) {
     $_SESSION['error'] = "Πρέπει να κάνετε Login για να παίξετε!";
-    header("Location: login.php");
+    header("Location: index.php"); // Επιστροφή στην αρχική για ασφάλεια
     exit();
 }
 
-// --- LOGIC FIX: Υπολογισμός ονομάτων για JavaScript και Session ---
+// --- Υπολογισμός ονομάτων για JavaScript και UI ---
 $name_white = "";
 $name_black = "";
 
@@ -21,12 +22,12 @@ if (isset($_SESSION['player1_color']) && $_SESSION['player1_color'] == 'white') 
     $name_black = $_SESSION['player1_name'];
 }
 
-// Αρχικοποίηση Session (αν δεν έχει γίνει ήδη)
+// Αρχικοποίηση Session μεταβλητών (αν δεν έχει γίνει ήδη)
 if (!isset($_SESSION['player_white'])) {
     $_SESSION['player_white'] = $name_white; 
     $_SESSION['player_black'] = $name_black; 
     
-    // Ποιο χρώμα είμαι εγώ;
+    // Προσδιορισμός χρώματος τρέχοντος χρήστη
     if($_SESSION['player1_name'] == $name_white) {
         $_SESSION['my_color'] = 'white';
     } else {
@@ -36,31 +37,35 @@ if (!isset($_SESSION['player_white'])) {
     $is_hotseat = (isset($_SESSION['game_mode']) && $_SESSION['game_mode'] === 'hotseat');
     
     // ==================================================================
-    // ΝΕΟΣ ΚΩΔΙΚΑΣ: ΚΑΘΑΡΙΣΜΟΣ ZOMBIE GAMES
+    // ΝΕΟΣ ΚΩΔΙΚΑΣ: ΚΑΘΑΡΙΣΜΟΣ ZOMBIE GAMES (Διορθωμένος)
     // ==================================================================
     
     // 1. Τραβάμε status ΚΑΙ χρόνο τελευταίας αλλαγής
-    $status_data = $mysqli->query("SELECT status, last_change FROM game_status")->fetch_assoc();
+    $status_data = $mysqli->query("SELECT status, last_change FROM game_status LIMIT 1")->fetch_assoc();
     $status_check = $status_data['status'];
     
     // 2. Υπολογίζουμε πόση ώρα έχει περάσει (σε δευτερόλεπτα)
     $last_active_time = strtotime($status_data['last_change']);
-    $time_diff = time() - $last_active_time; // Τωρινή ώρα μείον ώρα βάσης
+    $time_diff = time() - $last_active_time; 
 
-    // 3. Μετράμε παίκτες
+    // 3. Μετράμε ενεργούς παίκτες στη βάση
     $players_count = $mysqli->query("SELECT count(*) as c FROM players WHERE username IS NOT NULL")->fetch_assoc()['c'];
 
-    // Η ΣΥΝΘΗΚΗ: Καθαρίζουμε αν είναι Hotseat, ή Aborted, ή κενό, 
-    // Ή αν είναι 'started' ΑΛΛΑ έχουν περάσει πάνω από 15 λεπτά (900 δευτ.) αδράνειας
-    if ($is_hotseat || $status_check === 'aborted' || $players_count == 0 || ($status_check === 'started' && $time_diff > 900)) {
-        
+    /**
+     * Η ΔΙΟΡΘΩΜΕΝΗ ΣΥΝΘΗΚΗ: 
+     * Καθαρίζουμε το ταμπλό ΜΟΝΟ αν:
+     * - Είναι Hotseat (τοπικό παιχνίδι, ξεκινάμε πάντα από την αρχή).
+     * - Υπάρχουν 0 παίκτες στη βάση ΚΑΙ το status ΔΕΝ είναι 'aborted' (για να μην σβήσουμε το σήμα εξόδου).
+     * - Έχουν περάσει πάνω από 15 λεπτά (900 δευτ.) πλήρους αδράνειας.
+     */
+    if ($is_hotseat || ($players_count == 0 && $status_check !== 'aborted') || ($status_check === 'started' && $time_diff > 900)) {
         $mysqli->query("call clean_board()");
         $mysqli->query("UPDATE game_status SET status='not active', result=NULL, p_turn=NULL");
     }
     // ==================================================================
 }
 
-// Υπολογισμός μεταβλητής για JS
+// Υπολογισμός μεταβλητής για το frontend Javascript
 $is_hotseat_js = (isset($_SESSION['game_mode']) && $_SESSION['game_mode'] === 'hotseat') ? 'true' : 'false';
 ?>
 <!DOCTYPE html>
