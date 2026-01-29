@@ -2,7 +2,6 @@
 require_once "lib/dbconnect.php"; 
 session_start();
 
-// 1. ΛΟΓΙΚΗ ΓΙΑ ONLINE ΕΙΔΟΠΟΙΗΣΗ (Αν κάποιος φύγει στη μέση)
 if (isset($_SESSION['game_mode']) && $_SESSION['game_mode'] == 'online') {
     if(isset($_SESSION['token'])) {
         $token = $_SESSION['token'];
@@ -13,28 +12,23 @@ if (isset($_SESSION['game_mode']) && $_SESSION['game_mode'] == 'online') {
             $my_color = $row['piece_color'];
             $winner = ($my_color == 'W') ? 'B' : 'W';
             
-            // Ενημερώνουμε τον αντίπαλο μόνο αν το παιχνίδι ΠΑΙΖΟΤΑΝ ακόμα
-            // Αν είχε ήδη τελειώσει (status='ended'), δεν χρειάζεται το 'aborted'
+            // 1. Στέλνουμε σήμα aborted. 
+            // ΠΡΟΣΟΧΗ: Δεν καλούμε clean_board ακόμα για να προλάβει να το δει ο άλλος!
             $mysqli->query("UPDATE game_status SET status='aborted', result='$winner' WHERE status='started' OR status='first_roll'");
         }
     }
 }
 
-// 2. ΚΑΘΟΛΙΚΟΣ ΚΑΘΑΡΙΣΜΟΣ (Για Hotseat και Online)
-// Καθαρίζουμε το ταμπλό και μηδενίζουμε τα w_off, b_off (μέσω της procedure)
-$mysqli->query("call clean_board()");
-
-// Μηδενίζουμε τους παίκτες
+// 2. Καθαρίζουμε ΤΟΥΣ ΠΑΝΤΕΣ από τον πίνακα players
 $mysqli->query("UPDATE players SET username=NULL, token=NULL, last_action=NULL");
 
-// Μηδενίζουμε το σκορ και το status για την επόμενη παρτίδα/χρήστες
-$mysqli->query("UPDATE game_status SET status='not active', p_turn=NULL, result=NULL, score_w=0, score_b=0, last_change=NOW()");
+// 3. Μηδενίζουμε τα σκορ
+$mysqli->query("UPDATE game_status SET score_w=0, score_b=0");
 
-// 3. ΚΑΤΑΣΤΡΟΦΗ SESSION
+// 4. Καταστροφή Session
 session_unset();
 session_destroy();
 
-// Επιστροφή στην αρχική
 header("Location: index.php");
 exit;
 ?>
