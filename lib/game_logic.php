@@ -46,25 +46,42 @@ function handle_status($method, $input=null) {
     }
 }
 
-function show_status() { global $mysqli; $res = $mysqli->query("SELECT * FROM game_status LIMIT 1"); if($res) { echo json_encode($res->fetch_assoc(), JSON_PRETTY_PRINT); } }
+function show_status() { 
+    global $mysqli; 
+    $res = $mysqli->query("SELECT * FROM game_status LIMIT 1"); 
+    if($res) { 
+        echo json_encode($res->fetch_assoc(), JSON_PRETTY_PRINT); 
+    } 
+}
 
 function update_game_status() {
     global $mysqli; 
+    if (session_status() === PHP_SESSION_NONE) { session_start(); }
+
     $res = $mysqli->query("SELECT status FROM game_status LIMIT 1"); 
     $status = $res->fetch_assoc()['status'];
-    $sql_players = "SELECT count(*) as c FROM players WHERE username IS NOT NULL AND last_action > (NOW() - INTERVAL 15 MINUTE)";
+    
+    $sql_players = "SELECT count(*) as c FROM players WHERE username IS NOT NULL AND last_action > (NOW() - INTERVAL 5 MINUTE)";
     $active_players = $mysqli->query($sql_players)->fetch_assoc()['c'];
 
+    // 1. Έναρξη παιχνιδιού
     if ($status == 'not active' && $active_players == 2) { 
         $mysqli->query("UPDATE game_status SET status='started', p_turn='W', moves_left=0, last_change=NOW()"); 
     }
-    elseif ($status == 'started') {
-        $sql_timeout = "SELECT piece_color FROM players WHERE last_action < (NOW() - INTERVAL 15 MINUTE) AND username IS NOT NULL"; 
+    // 2. Έλεγχος Αποχώρησης (Timeout)
+    elseif ($status == 'started' && isset($_SESSION['game_mode']) && $_SESSION['game_mode'] === 'online') {
+        $sql_timeout = "SELECT piece_color FROM players WHERE last_action < (NOW() - INTERVAL 5 MINUTE) AND username IS NOT NULL"; 
         $res_timeout = $mysqli->query($sql_timeout);
+        
         if ($row = $res_timeout->fetch_assoc()) { 
             $sleeping_color = $row['piece_color']; 
             $winner = ($sleeping_color == 'W') ? 'B' : 'W'; 
+            
+            // Ενημερώνουμε ότι το παιχνίδι ακυρώθηκε
             $mysqli->query("UPDATE game_status SET status='aborted', result='$winner', p_turn=NULL"); 
+            
+            // ΚΑΘΑΡΙΖΟΥΜΕ τον παίκτη που έφυγε από τη βάση
+            $mysqli->query("UPDATE players SET username=NULL, token=NULL, last_action=NULL WHERE piece_color='$sleeping_color'");
         }
     }
 }
@@ -84,8 +101,16 @@ function roll_dice() {
 function pass_turn() { 
     global $mysqli; 
     $status = $mysqli->query("SELECT p_turn FROM game_status LIMIT 1")->fetch_assoc(); 
-    $next = ($status['p_turn'] == 'W') ? 'B' : 'W';
+    $current_p = $status['p_turn'];
+    $next = ($current_p == 'W') ? 'B' : 'W';
+
+    // 1. Ενημέρωση σειράς και καθαρισμός ζαριών
     $mysqli->query("UPDATE game_status SET p_turn='$next', dice1=NULL, dice2=NULL, moves_left=0, last_change=NOW()"); 
+
+    // 2. Ενημέρωση δραστηριότητας (last_action) για τον παίκτη που πάτησε Πάσο
+    // Έτσι το σύστημα ξέρει ότι είναι ακόμα εκεί!
+    $mysqli->query("UPDATE players SET last_action=NOW() WHERE piece_color='$current_p'");
+
     show_status(); 
 }
 
