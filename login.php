@@ -10,6 +10,16 @@ $taken_color = null;
 
 
 if (isset($_GET['mode']) && $_GET['mode'] == 'online') {
+    // ΝΕΟ: Πριν από όλα, καθαρίζουμε όποιον παίκτη έχει "πεθάνει" (πάνω από 5 λεπτά αδράνεια)
+    // Αυτό ελευθερώνει τις θέσεις για τους επόμενους.
+    $mysqli->query("UPDATE players SET username=NULL, token=NULL, last_action=NULL WHERE last_action < (NOW() - INTERVAL 5 MINUTE)");
+
+    // Αν δεν υπάρχει κανένας ενεργός παίκτης, καθάρισε το ταμπλό για τη νέα παρτίδα
+    $res_active = $mysqli->query("SELECT count(*) as c FROM players WHERE username IS NOT NULL");
+    if ($res_active->fetch_assoc()['c'] == 0) {
+        $mysqli->query("call clean_board()");
+    }
+
     $sql = "SELECT count(*) as c FROM players WHERE username IS NOT NULL AND last_action > (NOW() - INTERVAL 5 MINUTE)";
     $res = $mysqli->query($sql);
     $active_players = $res->fetch_assoc()['c'];
@@ -147,18 +157,21 @@ unset($_SESSION['error']);
             <label for="player1">Όνομα Παίκτη 1:</label>
             <input type="text" id="player1" name="player1" placeholder="Όνομα..." required>
             
-            <label for="p1_color">Ο Παίκτης 1 παίζει με:</label>
+            <label for="p1_color">Επιλέξτε χρώμα:</label>
             <select id="p1_color" name="p1_color">
-                <?php if ($taken_color == 'W'): ?>
-                    <option value="white" disabled>Άσπρα (Πιασμένο)</option>
-                    <option value="black" selected>Μαύρα</option>
-                <?php elseif ($taken_color == 'B'): ?>
-                    <option value="white" selected>Άσπρα</option>
-                    <option value="black" disabled>Μαύρα (Πιασμένο)</option>
-                <?php else: ?>
-                    <option value="white" selected>Άσπρα</option>
-                    <option value="black">Μαύρα</option>
-                <?php endif; ?>
+                <!-- Αν είναι πιασμένα τα Λευκά (W), απενεργοποίησε το white και προεπίλεξε το black -->
+                <option value="white" 
+                    <?php if($taken_color == 'W') echo 'disabled'; ?> 
+                    <?php if($taken_color == 'B') echo 'selected'; ?>>
+                    Άσπρα <?php if($taken_color == 'W') echo '(Πιασμένο)'; ?>
+                </option>
+
+                <!-- Αν είναι πιασμένα τα Μαύρα (B), απενεργοποίησε το black και προεπίλεξε το white -->
+                <option value="black" 
+                    <?php if($taken_color == 'B') echo 'disabled'; ?> 
+                    <?php if($taken_color == 'W') echo 'selected'; ?>>
+                    Μαύρα <?php if($taken_color == 'B') echo '(Πιασμένο)'; ?>
+                </option>
             </select>
 
             <hr> 
