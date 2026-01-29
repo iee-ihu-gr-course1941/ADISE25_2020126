@@ -23,9 +23,14 @@ async function checkGameStatus() {
     try {
         const response = await fetch('tavli.php/status/');
         const status = await response.json();
-        currentMovesLeft = parseInt(status.moves_left);  
+        currentMovesLeft = parseInt(status.moves_left); 
 
-        if (lastTurn !== status.p_turn) { resetTimer(); lastTurn = status.p_turn; }
+        // --- ΔΙΟΡΘΩΣΗ: ΑΛΛΑΓΗ ΣΕΙΡΑΣ ---
+        if (lastTurn !== status.p_turn) { 
+            resetTimer(); 
+            lastTurn = status.p_turn; 
+            selectedPieceId = null; // Μηδενισμός επιλεγμένου πουλιού στην αλλαγή σειράς
+        }
 
         // ΕΛΕΓΧΟΣ ΝΙΚΗΣ
         if (status.status === 'ended') {
@@ -43,6 +48,7 @@ async function checkGameStatus() {
                 });
                 isAnimating = false;
                 lastTurn = null; // Reset για το χρονόμετρο
+                selectedPieceId = null; // Ασφάλεια
                 updateAll();
             } else {
                 // ΟΧΙ: Έξοδος και μηδενισμός
@@ -54,7 +60,9 @@ async function checkGameStatus() {
         // Σήμα Επανεκκίνησης (Online)
         if (status.result && status.result.startsWith('RESTART_')) {
             let win = status.result.split('_')[1], my = (myColor === 'white') ? 'W' : 'B';
-            resetTimer(); if (win === my) alert("Ο αντίπαλος επέλεξε επανεκκίνηση παιχνιδιού. Κερδίσατε!");
+            resetTimer(); 
+            selectedPieceId = null; // Αποεπιλογή και εδώ
+            if (win === my) alert("Ο αντίπαλος επέλεξε επανεκκίνηση παιχνιδιού. Κερδίσατε!");
             await fetch('tavli.php/status/', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'clear_result' }) });
             return;
         }
@@ -80,7 +88,7 @@ async function checkGameStatus() {
             if(btnStart) btnStart.style.display = 'inline-block';
             if(gameControls) gameControls.style.display = 'none';
         } else {
-            if(btnStart) btnStart.style.display = 'none'; // HIDE ΤΗΝ ΕΝΑΡΞΗ
+            if(btnStart) btnStart.style.display = 'none'; 
             if(gameControls) gameControls.style.display = 'block';
             document.getElementById('btn-pass').disabled = !isMyTurn;
             document.getElementById('turn-label-w').style.display = (status.p_turn === 'W') ? 'inline-block' : 'none';
@@ -108,48 +116,65 @@ async function checkGameStatus() {
 async function refreshBoard() {
     if (isAnimating) return;
     try {
-        const response = await fetch('tavli.php/board/'), data = await response.json();
+        const response = await fetch('tavli.php/board/');
+        const data = await response.json();
         boardState = data; 
-        const statusRes = await fetch('tavli.php/status/'), statusData = await statusRes.json();
 
-        // 1. Καθαρισμός
+        const statusRes = await fetch('tavli.php/status/');
+        const statusData = await statusRes.json();
+
+        // 1. ΑΚΑΡΙΑΙΟΣ ΕΛΕΓΧΟΣ ΕΤΟΙΜΟΤΗΤΑΣ (Βασίζεται μόνο στο Board Data)
+        // Ελέγχουμε αν υπάρχει έστω και ένα πούλι ΕΚΤΟΣ σπιτιού
+        const hasWhiteOutside = data.some(p => p.piece_color === 'W' && parseInt(p.piece_count) > 0 && parseInt(p.x) > 6);
+        const hasBlackOutside = data.some(p => p.piece_color === 'B' && parseInt(p.piece_count) > 0 && (parseInt(p.x) < 13 || parseInt(p.x) > 18));
+        
+        // Ελέγχουμε αν υπάρχουν πούλια του παίκτη γενικά στο ταμπλό (για να μην βγαίνει alert αν έχει μαζέψει τα πάντα)
+        const hasWhiteOnBoard = data.some(p => p.piece_color === 'W' && parseInt(p.piece_count) > 0);
+        const hasBlackOnBoard = data.some(p => p.piece_color === 'B' && parseInt(p.piece_count) > 0);
+
+        // Μήνυμα για Λευκά: Αν δεν έχει τίποτα έξω, έχει πούλια μέσα και δεν έχουμε στείλει alert ακόμα
+        if (!hasWhiteOutside && hasWhiteOnBoard && !whiteReadyAlerted) {
+            alert("Ο παίκτης (Άσπρα) είναι έτοιμος να μαζέψει τα πούλια!");
+            whiteReadyAlerted = true;
+        } else if (hasWhiteOutside) {
+            whiteReadyAlerted = false;
+        }
+
+        // Μήνυμα για Μαύρα
+        if (!hasBlackOutside && hasBlackOnBoard && !blackReadyAlerted) {
+            alert("Ο παίκτης (Μαύρα) είναι έτοιμος να μαζέψει τα πούλια!");
+            blackReadyAlerted = true;
+        } else if (hasBlackOutside) {
+            blackReadyAlerted = false;
+        }
+
+        // 2. Καθαρισμός Points και off-zones
         document.querySelectorAll('.point, .off-zone').forEach(p => { 
             p.innerHTML = ''; p.classList.remove('possible-move'); p.onclick = null; 
         });
-
-        // 2. Υπολογισμός αν μπορεί να μαζέψει (canCollect) - ΔΙΟΡΘΩΜΕΝΟ
-        const myCode = (myColor === 'white' ? 'W' : 'B');
-        
-        // Μετράμε πόσα πούλια υπάρχουν ΕΚΤΟΣ της περιοχής μαζέματος
-        const piecesOutside = boardState.filter(p => 
-            p.piece_color === myCode && 
-            parseInt(p.piece_count) > 0 && // <--- ΠΡΕΠΕΙ ΝΑ ΕΧΕΙ ΠΟΥΛΙΑ
-            (myColor === 'white' ? parseInt(p.x) > 6 : (parseInt(p.x) < 13 || parseInt(p.x) > 18))
-        ).length;
-
-        const canCollect = (piecesOutside === 0);
-
-        // Alert Ετοιμότητας (μόνο μία φορά)
-        if (canCollect) {
-            if (myColor === 'white' && !whiteReadyAlerted) {
-                alert("Ο παίκτης (Άσπρα) είναι έτοιμος να μαζέψει τα πούλια!");
-                whiteReadyAlerted = true;
-            } else if (myColor === 'black' && !blackReadyAlerted) {
-                alert("Ο παίκτης (Μαύρα) είναι έτοιμος να μαζέψει τα πούλια!");
-                blackReadyAlerted = true;
-            }
-        }
 
         // 3. Σχεδίαση Πουλιών στο Ταμπλό
         data.forEach(pos => {
             const tri = document.getElementById('p' + pos.x);
             if(tri && parseInt(pos.piece_count) > 0) {
                 for(let i=0; i<parseInt(pos.piece_count); i++) {
-                    const pc = document.createElement('div'); pc.className = 'piece ' + (pos.piece_color === 'W' ? 'white-piece' : 'black-piece');
+                    const pc = document.createElement('div');
+                    pc.className = 'piece ' + (pos.piece_color === 'W' ? 'white-piece' : 'black-piece');
                     if (selectedPieceId === parseInt(pos.x) && i === parseInt(pos.piece_count) - 1) pc.classList.add('selected-piece');
-                    if ((pos.piece_color === 'W' && myColor === 'white') || (pos.piece_color === 'B' && myColor === 'black')) {
-                        pc.style.cursor = isMyTurn ? 'pointer' : 'default';
-                        pc.onclick = (e) => { e.stopPropagation(); selectPiece(pos.x); };
+                    
+                    const isMine = (pos.piece_color === 'W' && myColor === 'white') || (pos.piece_color === 'B' && myColor === 'black');
+                    if (isMine && isMyTurn) {
+                        pc.style.cursor = 'pointer';
+                        pc.onclick = (e) => {
+                            e.stopPropagation();
+                            // Υπολογισμός ετοιμότητας για το κλικ μαζέματος
+                            const ready = (myColor === 'white' ? !hasWhiteOutside : !hasBlackOutside);
+                            const dist = (myColor === 'white') ? parseInt(pos.x) : (parseInt(pos.x) - 12);
+                            const hasExitDie = (currentDice.d1 >= dist || currentDice.d2 >= dist);
+                            
+                            if (ready && hasExitDie) handleCollectClick(pos.x); 
+                            else selectPiece(pos.x);
+                        };
                     }
                     tri.appendChild(pc);
                 }
@@ -158,11 +183,12 @@ async function refreshBoard() {
 
         // 4. Σχεδίαση στις Θήκες Εξόδου
         const exW = document.getElementById('exit-w'), exB = document.getElementById('exit-b');
-        for(let i=0; i < statusData.w_off; i++) { let p = document.createElement('div'); p.className = 'piece white-piece'; exW.appendChild(p); }
-        for(let i=0; i < statusData.b_off; i++) { let p = document.createElement('div'); p.className = 'piece black-piece'; exB.appendChild(p); }
+        if(exW) for(let i=0; i < statusData.w_off; i++) { let p = document.createElement('div'); p.className = 'piece white-piece'; exW.appendChild(p); }
+        if(exB) for(let i=0; i < statusData.b_off; i++) { let p = document.createElement('div'); p.className = 'piece black-piece'; exB.appendChild(p); }
 
         if (selectedPieceId !== null && isMyTurn) {
-            showSuggestions(selectedPieceId, canCollect);
+            const ready = (myColor === 'white' ? !hasWhiteOutside : !hasBlackOutside);
+            showSuggestions(selectedPieceId, ready);
         }
     } catch (e) { console.error(e); }
 }
@@ -267,6 +293,45 @@ async function handleCollectClick(fromPos) {
     } catch (e) { console.error(e); }
 }
 
+async function syncPlayers() {
+    try {
+        const resW = await fetch('tavli.php/player/W');
+        const dataW = await resW.json();
+        const resB = await fetch('tavli.php/player/B');
+        const dataB = await resB.json();
+
+        // Ενημέρωση Λευκού (W)
+        const nameW = (dataW.length > 0 && dataW[0].username) ? dataW[0].username : "Αναμονή...";
+        document.getElementById('p-name-w').innerText = nameW;
+        document.getElementById('score-name-w').innerText = nameW;
+
+        // Ενημέρωση Μαύρου (B)
+        const nameB = (dataB.length > 0 && dataB[0].username) ? dataB[0].username : "Αναμονή...";
+        document.getElementById('p-name-b').innerText = nameB;
+        document.getElementById('score-name-b').innerText = nameB;
+
+        // ΛΟΓΙΚΗ ΑΝΑΜΟΝΗΣ (Waiting Overlay)
+        const overlay = document.getElementById('waiting-overlay');
+        if (typeof isHotseat !== 'undefined' && isHotseat === false) {
+            // Το overlay κλείνει ΜΟΝΟ αν υπάρχουν και τα δύο ονόματα στη βάση
+            const p1Ready = (dataW.length > 0 && dataW[0].username);
+            const p2Ready = (dataB.length > 0 && dataB[0].username);
+            
+            if (p1Ready && p2Ready) {
+                overlay.style.display = 'none';
+            } else {
+                overlay.style.display = 'flex';
+            }
+        } else {
+            // Στο Hotseat δεν υπάρχει ποτέ overlay αναμονής
+            overlay.style.display = 'none';
+        }
+    } catch (e) { 
+        console.error("Sync Error:", e); 
+    }
+}
+
+
 // Πρόσθεσε αυτό στην αρχή της refreshBoard() για να καθαρίζει το scoreboard
 const sb = document.getElementById('scoreboard');
 if(sb) { sb.classList.remove('possible-move'); sb.onclick = null; }
@@ -279,5 +344,4 @@ async function rollDice() { await fetch('tavli.php/status/', { method: 'POST' })
 function selectPiece(pos) { selectedPieceId = (selectedPieceId === parseInt(pos)) ? null : parseInt(pos); updateAll(); }
 async function handlePointClick(t) { if (selectedPieceId === null) return; try { const res = await fetch('tavli.php/status/', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ action: 'move', from: selectedPieceId, to: parseInt(t), color: myColor }) }); const d = await res.json(); if(d.error) alert(d.error); selectedPieceId = null; await updateAll(); } catch (e) { console.error(e); } }
 async function resetGame() { if (typeof isHotseat !== 'undefined' && isHotseat === true) { if(confirm("Επανεκκίνηση;")) { await fetch('tavli.php/board/', { method: 'POST' }); resetTimer(); updateAll(); } } else { if(confirm("Είστε σίγουρος ότι θέλετε να παίξετε από την αρχή? Ο πόντος θα πάει στον αντίπαλο.")) { await fetch('tavli.php/status/', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'reset_online', color: myColor }) }); resetTimer(); updateAll(); } } }
-async function syncPlayers() { try { const rW = await fetch('tavli.php/player/W'), dW = await rW.json(), rB = await fetch('tavli.php/player/B'), dB = await rB.json(); if (dW.length > 0) document.getElementById('p-name-w').innerText = dW[0].username; if (dB.length > 0) document.getElementById('p-name-b').innerText = dB[0].username; } catch (e) { console.error(e); } }
 document.addEventListener('DOMContentLoaded', () => { updateAll(); if (!isHotseat) setInterval(updateAll, 5000); });
