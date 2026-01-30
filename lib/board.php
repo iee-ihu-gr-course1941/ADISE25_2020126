@@ -6,7 +6,7 @@ function handle_board($method, $input) {
     }
     elseif($method=='POST') {
         reset_board();
-    }
+    } 
 }
 
 function show_board() {
