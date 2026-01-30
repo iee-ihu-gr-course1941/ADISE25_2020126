@@ -38,15 +38,14 @@ try {
     }
 
 } catch (Throwable $e) {
-    // 1. Καταγραφή του σφάλματος στο κρυφό log αρχείο μας
+    //Καταγραφή του σφάλματος στο log 
     app_log("FATAL ERROR: " . $e->getMessage() . " in " . $e->getFile() . ":" . $e->getLine(), "FATAL");
 
-    // 2. Επιστροφή "ευγενούς" σφάλματος στον χρήστη
     http_response_code(500);
     header('Content-Type: application/json');
     echo json_encode([
         'error' => 'Παρουσιάστηκε ένα εσωτερικό πρόβλημα στην εφαρμογή. Η τεχνική ομάδα ενημερώθηκε.',
-        'ref_id' => date('Ymd-His') // Ένα ID για να μπορεί ο χρήστης να σου αναφέρει πότε έγινε
+        'ref_id' => date('Ymd-His') 
     ]);
 }
 ?>
