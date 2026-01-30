@@ -3,76 +3,68 @@
 require_once "lib/dbconnect.php";
 session_start();
 
-// Έλεγχος αν ο χρήστης έχει περάσει από τη διαδικασία Login
-if (!isset($_SESSION['player1_name']) || !isset($_SESSION['player2_name'])) {
-    $_SESSION['error'] = "Πρέπει να κάνετε Login για να παίξετε!";
-    header("Location: index.php"); // Επιστροφή στην αρχική για ασφάλεια
+//Έλεγχος αν έχει επιλεγεί Mode. Αν όχι, πίσω στην αρχή.
+if (!isset($_SESSION['game_mode'])) {
+    header("Location: index.php");
     exit();
 }
 
-// --- Υπολογισμός ονομάτων για JavaScript και UI ---
-$name_white = "";
-$name_black = "";
-
-if (isset($_SESSION['player1_color']) && $_SESSION['player1_color'] == 'white') {
-    $name_white = $_SESSION['player1_name'];
-    $name_black = $_SESSION['player2_name'];
-} else {
-    $name_white = $_SESSION['player2_name']; 
-    $name_black = $_SESSION['player1_name'];
+//Έλεγχος αν ο τρέχων παίκτης έχει κάνει login.
+if (!isset($_SESSION['player1_name'])) {
+    header("Location: login.php?mode=" . $_SESSION['game_mode']);
+    exit();
 }
 
-// Αρχικοποίηση Session μεταβλητών (αν δεν έχει γίνει ήδη)
-if (!isset($_SESSION['player_white'])) {
+$is_hotseat = ($_SESSION['game_mode'] === 'hotseat');
+
+//Αν είναι Hotseat, απαιτούμε να υπάρχουν και τα δύο ονόματα στο Session.
+// Αν είναι Online, επιτρέπουμε την είσοδο μόνο με το player1_name (ο 2ος θα συνδεθεί μετά).
+if ($is_hotseat && (!isset($_SESSION['player2_name']) || empty($_SESSION['player2_name']))) {
+    $_SESSION['error'] = "Πρέπει να δώσετε ονόματα και για τους δύο παίκτες!";
+    header("Location: login.php?mode=hotseat");
+    exit();
+}
+
+$p1 = $_SESSION['player1_name'];
+$p1_color = $_SESSION['player1_color'];
+$p2 = (isset($_SESSION['player2_name']) && $_SESSION['player2_name'] !== "") ? $_SESSION['player2_name'] : "Αναμονή...";
+
+if ($p1_color == 'white') {
+    $name_white = $p1; $name_black = $p2;
+} else {
+    $name_white = $p2; $name_black = $p1;
+}
+
+//Αρχικοποίηση Session μεταβλητών (αν δεν έχει γίνει ήδη)
+if (!isset($_SESSION['my_color'])) {
     $_SESSION['player_white'] = $name_white; 
     $_SESSION['player_black'] = $name_black; 
+    $_SESSION['my_color'] = ($p1_color == 'white') ? 'white' : 'black';
     
-    // Προσδιορισμός χρώματος τρέχοντος χρήστη
-    if($_SESSION['player1_name'] == $name_white) {
-        $_SESSION['my_color'] = 'white';
-    } else {
-        $_SESSION['my_color'] = 'black';
-    }
-    
-    $is_hotseat = (isset($_SESSION['game_mode']) && $_SESSION['game_mode'] === 'hotseat');
-    
-    // ==================================================================
-    // ΝΕΟΣ ΚΩΔΙΚΑΣ: ΚΑΘΑΡΙΣΜΟΣ ZOMBIE GAMES (Διορθωμένος)
-    // ==================================================================
-    
-    // 1. Τραβάμε status ΚΑΙ χρόνο τελευταίας αλλαγής
-    $status_data = $mysqli->query("SELECT status, last_change FROM game_status LIMIT 1")->fetch_assoc();
+    // Καθαρισμός 
+    $status_res = $mysqli->query("SELECT status, result FROM game_status LIMIT 1");
+    $status_data = $status_res->fetch_assoc();
     $status_check = $status_data['status'];
-    
-    // 2. Υπολογίζουμε πόση ώρα έχει περάσει (σε δευτερόλεπτα)
-    $last_active_time = strtotime($status_data['last_change']);
-    $time_diff = time() - $last_active_time; 
+    $result_check = $status_data['result'];
 
-    // 3. Μετράμε ενεργούς παίκτες στη βάση
-    $players_count = $mysqli->query("SELECT count(*) as c FROM players WHERE username IS NOT NULL")->fetch_assoc()['c'];
-
-    /**
-     * Η ΔΙΟΡΘΩΜΕΝΗ ΣΥΝΘΗΚΗ: 
-     * Καθαρίζουμε το ταμπλό ΜΟΝΟ αν:
-     * - Είναι Hotseat (τοπικό παιχνίδι, ξεκινάμε πάντα από την αρχή).
-     * - Υπάρχουν 0 παίκτες στη βάση ΚΑΙ το status ΔΕΝ είναι 'aborted' (για να μην σβήσουμε το σήμα εξόδου).
-     * - Έχουν περάσει πάνω από 15 λεπτά (900 δευτ.) πλήρους αδράνειας.
-     */
-    if ($is_hotseat || ($players_count == 0 && $status_check !== 'aborted') || ($status_check === 'started' && $time_diff > 900)) {
-        $mysqli->query("call clean_board()");
-        $mysqli->query("UPDATE game_status SET status='not active', result=NULL, p_turn=NULL");
+    // Μην καθαρίζεις αν το παιχνίδι τελείωσε (ended) ή περιμένει απάντηση (_READY)
+    if ($status_check !== 'ended' && !str_contains((string)$result_check, 'READY')) {
+        $players_count = $mysqli->query("SELECT count(*) as c FROM players WHERE username IS NOT NULL")->fetch_assoc()['c'];
+        if ($is_hotseat || $players_count == 0) {
+            $mysqli->query("call clean_board()");
+            $mysqli->query("UPDATE game_status SET status='not active', result=NULL, p_turn=NULL, score_w=0, score_b=0");
+        }
     }
-    // ==================================================================
+    
 }
 
-// Υπολογισμός μεταβλητής για το frontend Javascript
-$is_hotseat_js = (isset($_SESSION['game_mode']) && $_SESSION['game_mode'] === 'hotseat') ? 'true' : 'false';
+$is_hotseat_js = $is_hotseat ? 'true' : 'false';
 ?>
 <!DOCTYPE html>
 <html lang="el">
 <head>
     <meta charset="UTF-8">
-    <title>Το Φεύγα μου</title>
+    <title>Φεύγα</title>
     
     <link href="bootstrap/bootstrap.min.css" rel="stylesheet">
     <link href="css/style.css" rel="stylesheet"> 
@@ -167,7 +159,7 @@ $is_hotseat_js = (isset($_SESSION['game_mode']) && $_SESSION['game_mode'] === 'h
             <div id="game-controls" style="display:none; margin-top:15px;">
                 <button id="btn-pass" onclick="passTurn()" class="btn btn-danger">Πάσο</button>
                 <button onclick="resetGame()" class="btn btn-primary">Επανεκκίνηση</button> 
-                <!-- Το UpdateAll παραμένει κρυφό αλλά χρήσιμο για debug αν χρειαστεί -->
+                <!-- Το UpdateAll είναι κρυφό -->
                 <button onclick="updateAll()" id="btn-refresh" style="display:none;">Ανανέωση</button>
             </div>
         </div>
