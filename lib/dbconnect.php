@@ -17,7 +17,7 @@ if(gethostname() == 'users.iee.ihu.gr') {
     $mysqli = new mysqli($host, $user, $pass, $db, 3307);
 }
 
-// Αν υπάρχει λάθος, το εμφανίζουμε (για να ξέρουμε τι φταίει)
+// Αν υπάρχει λάθος, το εμφανίζουμε 
 if ($mysqli->connect_errno) {
     var_dump("Απέτυχε η σύνδεση στη MySQL: (" . $mysqli->connect_errno . ") " . $mysqli->connect_error);
     die();
