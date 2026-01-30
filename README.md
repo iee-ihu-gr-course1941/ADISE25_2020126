@@ -4,7 +4,9 @@
 Η εφαρμογή βασίζεται σε αρχιτεκτονική Web API με χρήση PHP για το Backend και JavaScript (jQuery/AJAX) για το Frontend, ενώ η κατάσταση του παιχνιδιού αποθηκεύεται σε βάση δεδομένων MySQL.
 
 🛠 Τεχνολογίες που χρησιμοποιήθηκαν
-Backend: PHP 8.x
+
+Backend: PHP
+
 Database: MySQL / MariaDB
 Frontend: HTML5, CSS3, JavaScript (ES6)
 Libraries: jQuery (AJAX polling), Bootstrap 4 (UI components)
