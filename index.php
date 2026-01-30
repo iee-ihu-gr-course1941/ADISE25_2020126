@@ -34,7 +34,7 @@
             flex-wrap: wrap;
             justify-content: center;
         }
-        /* Κάνουμε τα κουμπιά να φαίνονται σωστά ακόμα και με Bootstrap */
+       
         .btn-mode {
             padding: 30px 50px;
             font-size: 20px;
@@ -51,7 +51,7 @@
             width: 200px;
             box-shadow: 0 4px 6px rgba(0,0,0,0.3);
         }
-        .btn-mode:hover { color: white; text-decoration: none; } /* Fix για Bootstrap link hover */
+        .btn-mode:hover { color: white; text-decoration: none; } 
         
         .btn-mode small {
             font-size: 0.7em;
