@@ -1,121 +1,95 @@
 <?php
-
 // login.php
 require_once "./lib/dbconnect.php"; 
 session_start();
 
-// --- ΕΛΕΓΧΟΣ ΚΑΤΑΣΤΑΣΗΣ ΠΑΙΧΝΙΔΙΟΥ (ONLINE MODE) ---
+//Λήψη Mode
+if (isset($_GET['mode'])) { $_SESSION['game_mode'] = $_GET['mode']; }
+$requested_mode = isset($_SESSION['game_mode']) ? $_SESSION['game_mode'] : null;
+if (!$requested_mode) { header("Location: index.php"); exit(); }
+
+$is_hotseat = ($requested_mode === 'hotseat');
+
+//Καθαρισμός ανενεργών για να ξέρουμε πόσοι είναι μέσα
+$mysqli->query("UPDATE players SET username=NULL, token=NULL, last_action=NULL WHERE last_action < (NOW() - INTERVAL 5 MINUTE)");
+
+$res_count = $mysqli->query("SELECT count(*) as c FROM players WHERE username IS NOT NULL");
+$active_players = $res_count->fetch_assoc()['c'];
+
+if ($active_players == 0) {
+    $mysqli->query("call clean_board()");
+}
+
 $game_full = false;
 $taken_color = null;
+$opponent_name = null;
 
-
-if (isset($_GET['mode']) && $_GET['mode'] == 'online') {
-    // ΝΕΟ: Πριν από όλα, καθαρίζουμε όποιον παίκτη έχει "πεθάνει" (πάνω από 5 λεπτά αδράνεια)
-    // Αυτό ελευθερώνει τις θέσεις για τους επόμενους.
-    $mysqli->query("UPDATE players SET username=NULL, token=NULL, last_action=NULL WHERE last_action < (NOW() - INTERVAL 5 MINUTE)");
-
-    // Αν δεν υπάρχει κανένας ενεργός παίκτης, καθάρισε το ταμπλό για τη νέα παρτίδα
-    $res_active = $mysqli->query("SELECT count(*) as c FROM players WHERE username IS NOT NULL");
-    if ($res_active->fetch_assoc()['c'] == 0) {
-        $mysqli->query("call clean_board()");
-    }
-
-    $sql = "SELECT count(*) as c FROM players WHERE username IS NOT NULL AND last_action > (NOW() - INTERVAL 5 MINUTE)";
-    $res = $mysqli->query($sql);
-    $active_players = $res->fetch_assoc()['c'];
-
-    if ($active_players >= 2) {
-        $game_full = true;
-    }
-
-    if (!$game_full) {
-        $sql = "SELECT piece_color FROM players WHERE username IS NOT NULL AND last_action > (NOW() - INTERVAL 5 MINUTE)";
-        $res = $mysqli->query($sql);
-        if ($row = $res->fetch_assoc()) {
-            $taken_color = $row['piece_color']; 
-        }
+// Έλεγχοι πληρότητας και ονόματος αντιπάλου
+if ($active_players >= 2) {
+    $game_full = true;
+} elseif ($active_players == 1) {
+    if ($is_hotseat) {
+        $game_full = true; 
+    } else {
+        $res_opp = $mysqli->query("SELECT username, piece_color FROM players WHERE username IS NOT NULL LIMIT 1");
+        $row_opp = $res_opp->fetch_assoc();
+        $taken_color = $row_opp['piece_color'];
+        $opponent_name = $row_opp['username'];
     }
 }
 
-// --- ΚΑΘΑΡΙΣΜΟΣ SESSION ---
-if ($_SERVER["REQUEST_METHOD"] == "GET") {
-    $temp_error = isset($_SESSION['error']) ? $_SESSION['error'] : '';
-    $temp_mode = isset($_SESSION['game_mode']) ? $_SESSION['game_mode'] : '';
-    session_unset(); 
-    $_SESSION['game_mode'] = $temp_mode;
-    if($temp_error) $_SESSION['error'] = $temp_error;
-}
 
-// --- LOGIC ΓΙΑ ΤΟ POST (LOGIN) ---
 if ($_SERVER["REQUEST_METHOD"] == "POST") {
     $p1 = isset($_POST['player1']) ? trim($_POST['player1']) : '';
     $p2 = isset($_POST['player2']) ? trim($_POST['player2']) : '';
     $p1_color = isset($_POST['p1_color']) ? $_POST['p1_color'] : 'white';
 
-    if (empty($p1)) {
-        $_SESSION['error'] = "Παρακαλώ συμπληρώστε το όνομά σας!";
-        header("Location: login.php"); 
-        exit();
-    }
-    
-    $is_hotseat = ($_SESSION['game_mode'] === 'hotseat');
-    if ($is_hotseat && empty($p2)) {
-        $_SESSION['error'] = "Παρακαλώ συμπληρώστε και το όνομα του 2ου παίκτη!";
-        header("Location: login.php"); 
-        exit();
+    //Κενά ονόματα
+    if (empty($p1) || ($is_hotseat && empty($p2))) {
+        $_SESSION['error'] = "Παρακαλώ συμπληρώστε τα ονόματα!";
+        header("Location: login.php"); exit();
     }
 
-    // Αποθήκευση στο Session
+    //Ίδια ονόματα (Hotseat)
+    if ($is_hotseat && strtolower($p1) === strtolower($p2)) {
+        $_SESSION['error'] = "Οι παίκτες πρέπει να έχουν διαφορετικά ονόματα!";
+        header("Location: login.php"); exit();
+    }
+
+    //Ίδιο όνομα με αντίπαλο (Online)
+    if (!$is_hotseat && $opponent_name && strtolower($p1) === strtolower($opponent_name)) {
+        $_SESSION['error'] = "Αυτό το όνομα το έχει ήδη ο αντίπαλος!";
+        header("Location: login.php"); exit();
+    }
+
     $_SESSION['player1_name'] = $p1;
     $_SESSION['player2_name'] = $p2;
     $_SESSION['player1_color'] = $p1_color;
 
-    // ---------------------------------------------------------
-    // --- ΝΕΟΣ ΚΩΔΙΚΑΣ: ΕΓΓΡΑΦΗ ΣΤΗ ΒΑΣΗ ΔΕΔΟΜΕΝΩΝ (SQL) ---
-    // ---------------------------------------------------------
-    
-    // Δημιουργούμε ένα μοναδικό Token για τον παίκτη
-    $token = md5(uniqid(rand(), true));
-    $_SESSION['token'] = $token; // Το αποθηκεύουμε για να ξέρουμε ποιοι είμαστε
+    // Δημιουργία μοναδικών Tokens
+    $token1 = md5(uniqid($p1 . '1', true));
+    $token2 = md5(uniqid($p2 . '2', true));
+    $_SESSION['token'] = $token1;
 
     if ($is_hotseat) {
-        // ΑΝ ΕΙΝΑΙ HOTSEAT: Ενημερώνουμε και τους δύο παίκτες
-        // 1. Παίκτης 1
         $c1_db = ($p1_color == 'white') ? 'W' : 'B';
-        $sql = "UPDATE players SET username=?, token=?, last_action=NOW() WHERE piece_color=?";
-        $st = $mysqli->prepare($sql);
-        $st->bind_param('sss', $p1, $token, $c1_db);
-        $st->execute();
-
-        // 2. Παίκτης 2
         $c2_db = ($c1_db == 'W') ? 'B' : 'W';
-        $sql = "UPDATE players SET username=?, token=?, last_action=NOW() WHERE piece_color=?";
-        $st = $mysqli->prepare($sql);
-        $st->bind_param('sss', $p2, $token, $c2_db); // Χρησιμοποιούμε το ίδιο token στο Hotseat για ευκολία
-        $st->execute();
-
+        $mysqli->query("UPDATE players SET username='$p1', token='$token1', last_action=NOW() WHERE piece_color='$c1_db'");
+        $mysqli->query("UPDATE players SET username='$p2', token='$token2', last_action=NOW() WHERE piece_color='$c2_db'");
     } else {
-        // ΑΝ ΕΙΝΑΙ ONLINE: Ενημερώνουμε μόνο τον εαυτό μας
         $color_db = ($p1_color == 'white') ? 'W' : 'B';
-        
-        $sql = "UPDATE players SET username=?, token=?, last_action=NOW() WHERE piece_color=?";
-        $st = $mysqli->prepare($sql);
-        $st->bind_param('sss', $p1, $token, $color_db);
-        $st->execute();
+        $mysqli->query("UPDATE players SET username='$p1', token='$token1', last_action=NOW() WHERE piece_color='$color_db'");
     }
-    // ---------------------------------------------------------
-    // --- ΤΕΛΟΣ ΝΕΟΥ ΚΩΔΙΚΑ ---
-    // ---------------------------------------------------------
     
     header("Location: game.php");
     exit();
 }
 
-// Λήψη Mode
-if (isset($_GET['mode'])) { $_SESSION['game_mode'] = $_GET['mode']; }
-if (!isset($_SESSION['game_mode'])) { header("Location: index.php"); exit(); }
+// Καθαρισμός Session στο GET 
+if ($_SERVER["REQUEST_METHOD"] == "GET" && !isset($_SESSION['error'])) {
+    $m = $_SESSION['game_mode']; session_unset(); $_SESSION['game_mode'] = $m;
+}
 
-$is_hotseat = ($_SESSION['game_mode'] === 'hotseat');
 $error = isset($_SESSION['error']) ? $_SESSION['error'] : "";
 unset($_SESSION['error']);
 ?>
@@ -148,9 +122,9 @@ unset($_SESSION['error']);
 
     <?php if($error): ?><div class="error-msg"><?php echo $error; ?></div><?php endif; ?>
 
-    <?php if (!$is_hotseat && $game_full): ?>
+    <?php if ($game_full): ?>
         <div class="full-msg">⚠️ Το παιχνίδι είναι πλήρες!</div>
-        <p>Υπάρχουν ήδη 2 παίκτες συνδεδεμένοι.</p>
+        <p>Υπάρχουν ήδη ενεργοί παίκτες στο παιχνίδι.</p>
         <a href="index.php" class="btn-login" style="display:block; text-decoration:none; background:#34495e;">Επιστροφή</a>
     <?php else: ?>
         <form action="login.php" method="POST"> 
@@ -159,14 +133,12 @@ unset($_SESSION['error']);
             
             <label for="p1_color">Επιλέξτε χρώμα:</label>
             <select id="p1_color" name="p1_color">
-                <!-- Αν είναι πιασμένα τα Λευκά (W), απενεργοποίησε το white και προεπίλεξε το black -->
                 <option value="white" 
                     <?php if($taken_color == 'W') echo 'disabled'; ?> 
                     <?php if($taken_color == 'B') echo 'selected'; ?>>
                     Άσπρα <?php if($taken_color == 'W') echo '(Πιασμένο)'; ?>
                 </option>
 
-                <!-- Αν είναι πιασμένα τα Μαύρα (B), απενεργοποίησε το black και προεπίλεξε το white -->
                 <option value="black" 
                     <?php if($taken_color == 'B') echo 'disabled'; ?> 
                     <?php if($taken_color == 'W') echo 'selected'; ?>>
