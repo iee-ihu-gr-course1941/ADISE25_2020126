@@ -3,7 +3,7 @@ function app_log(string $message, string $level = 'INFO'): void
 {
     $logFile = __DIR__ . '/../logs/app.log';
     $date = date('Y-m-d H:i:s');
-    
+     
     // Προσθήκη επιπέδου και ημερομηνίας
     $line = "[$date] [$level] $message" . PHP_EOL;
 
