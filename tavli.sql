@@ -1,8 +1,8 @@
--- Δημιουργία / Επιλογή Βάσης
+-- Δημιουργία Βάσης
 CREATE DATABASE IF NOT EXISTS tavli;
 USE tavli;
 
--- 1. ΠΙΝΑΚΑΣ BOARD (Ταμπλό)
+-- Πίνακας Board
 DROP TABLE IF EXISTS `board`;
 CREATE TABLE `board` (
   `x` tinyint(4) NOT NULL,
@@ -19,8 +19,7 @@ INSERT INTO `board` (`x`, `piece_count`, `piece_color`) VALUES
 (19,0,null),(20,0,null),(21,0,null),(22,0,null),(23,0,null),(24,0,null);
 
 
--- 2. ΠΙΝΑΚΑΣ PLAYERS (Παίκτες)
--- ΠΡΟΣΘΕΣΑΜΕ ΑΥΤΗ ΤΗ ΓΡΑΜΜΗ ΓΙΑ ΝΑ ΜΗΝ ΒΓΑΖΕΙ ERROR 1050
+-- Πίνακας Players (Παίκτες)
 DROP TABLE IF EXISTS `players`; 
 
 CREATE TABLE players (
@@ -34,7 +33,7 @@ INSERT INTO players (piece_color) VALUES ('W');
 INSERT INTO players (piece_color) VALUES ('B');
 
 
--- 3. ΠΙΝΑΚΑΣ GAME_STATUS (Κατάσταση Παιχνιδιού)
+-- Πίνακας Game Status (Κατάσταση Παιχνιδιού)
 DROP TABLE IF EXISTS `game_status`;
 CREATE TABLE `game_status` (
   `status` enum('not active','first_roll','initialized','started','ended','aborted') NOT NULL DEFAULT 'not active',
@@ -57,32 +56,22 @@ INSERT INTO `game_status`
 ALTER TABLE game_status ADD COLUMN moves_left tinyint DEFAULT 0;
 
 
--- 4. ΔΙΑΔΙΚΑΣΙΕΣ (STORED PROCEDURES)
+-- Διαδικασία clean_board 
 DELIMITER //
 
--- clean_board: Καθαρίζει και στήνει το παιχνίδι για ΦΕΥΓΑ
 DROP PROCEDURE IF EXISTS clean_board//
 CREATE PROCEDURE clean_board()
 BEGIN
     -- Καθαρισμός ταμπλό
     UPDATE board SET piece_count = 0, piece_color = null;
 
-    -- Στήσιμο για ΦΕΥΓΑ
+    -- Στήσιμο 
     UPDATE board SET piece_count = 15, piece_color = 'W' WHERE x = 24;
     UPDATE board SET piece_count = 15, piece_color = 'B' WHERE x = 12;
     
     -- Ενημέρωση Status
     UPDATE game_status 
     SET status='not active', p_turn=NULL, dice1=NULL, dice2=NULL, result=NULL, moves_left=0, w_off=0, b_off=0;
-END //
-
--- clear_game: Μηδενίζει τα πάντα (Reset)
-DROP PROCEDURE IF EXISTS clear_game//
-CREATE PROCEDURE clear_game()
-BEGIN
-    UPDATE board SET piece_count = 0, piece_color = null;
-    UPDATE game_status 
-    SET status='not active', p_turn=NULL, dice1=NULL, dice2=NULL, result=NULL;
 END //
 
 DELIMITER ;
